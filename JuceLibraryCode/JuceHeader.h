@@ -29,6 +29,7 @@
 #include <juce_opengl/juce_opengl.h>
 
 #include "BinaryData.h"
+#include "juce_compat.h"
 
 #if ! DONT_SET_USING_JUCE_NAMESPACE
  // If your code uses a lot of JUCE classes, then this will obviously save you
