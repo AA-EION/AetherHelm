@@ -27,15 +27,15 @@ jobs:
             cmake_arch: ""
             artifact_name: AetherHelm-Linux-arm64
             archive_ext: tar.gz
-          # macOS Universal (x86_64 + arm64); built on macOS 14 for JUCE 7.0.12 SDK compatibility
-          - os: macos-14
+          # macOS Universal (x86_64 + arm64); built on macOS 15 with JUCE 8
+          - os: macos-15
             arch: universal
             cmake_arch: ""
             osx_arch: "x86_64;arm64"
             artifact_name: AetherHelm-macOS-Universal
             archive_ext: zip
           # Windows amd64 (x64)
-          - os: windows-2022
+          - os: windows-latest
             arch: x64
             cmake_arch: x64
             artifact_name: AetherHelm-Windows-x64
@@ -80,7 +80,7 @@ jobs:
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release
 
-      # macOS native build (x86_64 or arm64)
+      # macOS Universal build on macOS 15 SDK
       - name: Configure CMake (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -94,7 +94,7 @@ jobs:
         shell: pwsh
         run: cmake -B build -G "Visual Studio 17 2022" -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
 
-      # Compilation
+      # Compilation with memory and concurrency throttling (-j 4 / --parallel 4)
       - name: Build All Targets (Plugin, MCP Server, Tests)
         run: cmake --build build --config Release --parallel 4
 
@@ -102,47 +102,48 @@ jobs:
       - name: Run Test Suite
         run: ctest --test-dir build -C Release --output-on-failure
 
-      # Packaging Linux
+      # Packaging Linux (AppImage + Plugin Tarballs)
       - name: Package Artifacts (Linux)
         if: runner.os == 'Linux'
         run: |
-          mkdir -p dist
-          cp -r build/AetherHelm_artefacts/Release/* dist/ 2>/dev/null || true
-          cp -r build/AetherHelm_artefacts/* dist/ 2>/dev/null || true
-          find build -type f -name "aetherhelm-mcp" -exec cp {} dist/ \; 2>/dev/null || true
-          cp -r scripts dist/
+          chmod +x installers/linux/build-package.sh
+          ./installers/linux/build-package.sh
           tar -czf ${{ matrix.artifact_name }}.tar.gz -C dist .
 
-      # Packaging macOS
+      # Packaging macOS (Ad-Hoc Signing + Universal .pkg)
       - name: Package Artifacts (macOS)
         if: runner.os == 'macOS'
         run: |
-          mkdir -p dist
-          cp -r build/AetherHelm_artefacts/Release/* dist/ 2>/dev/null || true
-          cp -r build/AetherHelm_artefacts/* dist/ 2>/dev/null || true
-          find build -type f -name "aetherhelm-mcp" -exec cp {} dist/ \; 2>/dev/null || true
-          cp -r scripts dist/
+          chmod +x installers/macos/build-package.sh
+          ./installers/macos/build-package.sh
           cd dist && zip -r ../${{ matrix.artifact_name }}.zip .
 
-      # Packaging Windows
+      # Packaging Windows (Inno Setup Installer + Zip)
       - name: Package Artifacts (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist
-          if (Test-Path build/AetherHelm_artefacts) {
+          if (Test-Path build/AetherHelm_artefacts/Release) {
+            Copy-Item -Path build/AetherHelm_artefacts/Release/* -Destination dist -Recurse -Force -ErrorAction SilentlyContinue
+          } elseif (Test-Path build/AetherHelm_artefacts) {
             Copy-Item -Path build/AetherHelm_artefacts/* -Destination dist -Recurse -Force -ErrorAction SilentlyContinue
           }
           Get-ChildItem -Path build -Filter "aetherhelm-mcp.exe" -Recurse | ForEach-Object { Copy-Item $_.FullName -Destination dist }
           Copy-Item -Recurse scripts dist/
+          if (Get-Command iscc -ErrorAction SilentlyContinue) {
+            iscc installers/windows/installer.iss
+          }
           Compress-Archive -Path dist/* -DestinationPath "${{ matrix.artifact_name }}.zip"
 
-      # Upload CI Artifact
+      # Upload CI Artifacts
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_name }}.${{ matrix.archive_ext }}
+          path: |
+            dist/*
+            ${{ matrix.artifact_name }}.${{ matrix.archive_ext }}
 
   release:
     name: Publish GitHub Release
@@ -157,6 +158,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            **/*.exe
+            **/*.pkg
+            **/*.AppImage
             **/*.tar.gz
             **/*.zip
           generate_release_notes: true

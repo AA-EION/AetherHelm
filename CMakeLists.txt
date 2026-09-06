@@ -20,7 +20,7 @@ if(AETHERHELM_FETCH_JUCE)
     FetchContent_Declare(
         JUCE
         GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-        GIT_TAG 7.0.12
+        GIT_TAG 8.0.6
     )
     FetchContent_MakeAvailable(JUCE)
 else()
@@ -239,16 +239,10 @@ set(EDITOR_SECTIONS_SOURCES
     src/editor_sections/volume_section.cpp
 )
 
-# Plugin target formats
+# Plugin target formats (VST3 and Standalone supported across all platforms, AU on macOS)
 set(AETHERHELM_FORMATS Standalone VST3)
 if(APPLE)
     list(APPEND AETHERHELM_FORMATS AU)
-endif()
-
-# JUCE 7.0.12's VST3 moduleinfo tool (juce_vst3_helper) does not run correctly
-# on Windows ARM64, so build Standalone-only there.
-if(WIN32 AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|arm64|aarch64)$")
-    list(REMOVE_ITEM AETHERHELM_FORMATS VST3)
 endif()
 
 # ==============================================================================
@@ -292,6 +286,8 @@ target_compile_definitions(AetherHelm
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
         JUCE_MODAL_LOOPS_PERMITTED=1
+        JUCE_SILENCE_COREGRAPHICS_DEPRECATIONS=1
+        JUCE_SILENCE_XCODE_15_LINKER_WARNING=1
 )
 
 target_link_libraries(AetherHelm
@@ -332,6 +328,7 @@ target_compile_definitions(aetherhelm-mcp
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
         JUCE_MODAL_LOOPS_PERMITTED=1
+        JUCE_SILENCE_COREGRAPHICS_DEPRECATIONS=1
 )
 
 target_link_libraries(aetherhelm-mcp
@@ -378,6 +375,7 @@ target_compile_definitions(aetherhelm-tests
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
         JUCE_MODAL_LOOPS_PERMITTED=1
+        JUCE_SILENCE_COREGRAPHICS_DEPRECATIONS=1
 )
 
 target_link_libraries(aetherhelm-tests

@@ -558,11 +558,80 @@ void testMcpToolsExposeExternalAiToolsAndNoOpenRouterProxy() {
   assert(toolsJson.find("\"name\": \"remove_modulation\"") != std::string::npos || toolsJson.find("\"name\":\"remove_modulation\"") != std::string::npos);
   assert(toolsJson.find("\"name\": \"get_modulation_matrix\"") != std::string::npos || toolsJson.find("\"name\":\"get_modulation_matrix\"") != std::string::npos);
   assert(toolsJson.find("\"name\": \"trigger_preview_note\"") != std::string::npos || toolsJson.find("\"name\":\"trigger_preview_note\"") != std::string::npos);
+  assert(toolsJson.find("\"name\": \"morph_patch\"") != std::string::npos || toolsJson.find("\"name\":\"morph_patch\"") != std::string::npos);
+  assert(toolsJson.find("\"name\": \"randomize_section\"") != std::string::npos || toolsJson.find("\"name\":\"randomize_section\"") != std::string::npos);
+  assert(toolsJson.find("\"name\": \"describe_patch\"") != std::string::npos || toolsJson.find("\"name\":\"describe_patch\"") != std::string::npos);
+  assert(toolsJson.find("\"name\": \"validate_patch\"") != std::string::npos || toolsJson.find("\"name\":\"validate_patch\"") != std::string::npos);
 
   // Redundant internal OpenRouter proxy tool MUST NOT be present
   assert(toolsJson.find("generate_patch_from_prompt") == std::string::npos);
 
   std::cout << "[PASS] testMcpToolsExposeExternalAiToolsAndNoOpenRouterProxy" << std::endl;
+}
+
+void testMcpMacroAndValidationTools() {
+  std::cout << "[RUN] testMcpMacroAndValidationTools..." << std::endl;
+  AetherHelmMcpServer server;
+
+  // 1. Test describe_patch
+  std::string descJson = server.describePatch(true);
+  assert(descJson.find("\"success\": true") != std::string::npos || descJson.find("\"success\":true") != std::string::npos);
+  assert(descJson.find("description") != std::string::npos);
+  assert(descJson.find("patch_name") != std::string::npos);
+  std::cout << "  -> describePatch output verified." << std::endl;
+
+  // 2. Test randomize_section (filter)
+  std::string randResp = server.randomizeSection("filter", 0.7f);
+  assert(randResp.find("\"success\": true") != std::string::npos || randResp.find("\"success\":true") != std::string::npos);
+  assert(randResp.find("parameters_randomized") != std::string::npos);
+  std::cout << "  -> randomizeSection output verified." << std::endl;
+
+  // 3. Test morph_patch
+  std::string targetPatch = R"({
+    "settings": {
+      "cutoff": 80.0,
+      "resonance": 0.5
+    }
+  })";
+  std::string morphResp = server.morphPatch(targetPatch, 0.5f);
+  assert(morphResp.find("\"success\": true") != std::string::npos || morphResp.find("\"success\":true") != std::string::npos);
+  assert(morphResp.find("parameters_morphed") != std::string::npos);
+  std::cout << "  -> morphPatch output verified." << std::endl;
+
+  // 4. Test validate_patch (valid case)
+  std::string validPatch = R"({
+    "settings": {
+      "cutoff": 72.0,
+      "resonance": 0.4
+    },
+    "modulations": [
+      {
+        "source": "mod_envelope",
+        "destination": "cutoff",
+        "amount": 0.5
+      }
+    ]
+  })";
+  std::string valResp = server.validatePatch(validPatch);
+  assert(valResp.find("\"valid\": true") != std::string::npos || valResp.find("\"valid\":true") != std::string::npos);
+
+  // 5. Test validate_patch (invalid case with bad mod source)
+  std::string invalidPatch = R"({
+    "settings": {
+      "cutoff": 9999.0
+    },
+    "modulations": [
+      {
+        "source": "non_existent_source",
+        "destination": "cutoff",
+        "amount": 0.5
+      }
+    ]
+  })";
+  std::string invalResp = server.validatePatch(invalidPatch);
+  assert(invalResp.find("Invalid modulation source") != std::string::npos);
+
+  std::cout << "[PASS] testMcpMacroAndValidationTools" << std::endl;
 }
 
 int main() {
@@ -583,6 +652,7 @@ int main() {
   testMcpModulationRoutingTools();
   testMcpAudioAuditionPreviewMetrics();
   testMcpToolsExposeExternalAiToolsAndNoOpenRouterProxy();
+  testMcpMacroAndValidationTools();
   testJsonExtractionWithMarkdownAndCommentaryBraces();
   testNaNAndInfinityProtection();
   testBooleanParameterSupport();

@@ -364,6 +364,269 @@ std::string AetherHelmMcpServer::triggerPreviewNote(int noteNumber, float veloci
   return JSON::toString(report, true).toStdString();
 }
 
+std::string AetherHelmMcpServer::morphPatch(const std::string& targetPatchOrParamsJson, float factor) {
+  factor = std::clamp(factor, 0.0f, 1.0f);
+
+  var parsed;
+  Result res = JSON::parse(String(targetPatchOrParamsJson), parsed);
+  if (res.failed() || !parsed.isObject()) {
+    DynamicObject* errResp = new DynamicObject();
+    errResp->setProperty("success", false);
+    errResp->setProperty("error", "Invalid target patch JSON provided.");
+    return JSON::toString(errResp, false).toStdString();
+  }
+
+  std::map<std::string, float> targetControls;
+  auto extractTargets = [&targetControls](auto& self, const var& node, const std::string& prefix) -> void {
+    if (!node.isObject()) return;
+    DynamicObject* d = node.getDynamicObject();
+    for (const auto& prop : d->getProperties()) {
+      std::string key = prop.name.toString().toStdString();
+      std::string fullKey = prefix.empty() ? key : (prefix + "_" + key);
+      const var& val = prop.value;
+
+      if (val.isObject()) {
+        self(self, val, fullKey);
+      } else if (val.isDouble() || val.isInt() || val.isInt64() || val.isBool()) {
+        float fVal = val.isBool() ? ((bool)val ? 1.0f : 0.0f) : static_cast<float>(val);
+        std::string resolved = AetherPatchSerializer::resolveAlias(fullKey);
+        if (resolved.empty()) resolved = AetherPatchSerializer::resolveAlias(key);
+        if (resolved.empty()) resolved = fullKey;
+        targetControls[resolved] = fVal;
+      }
+    }
+  };
+
+  DynamicObject* rootObj = parsed.getDynamicObject();
+  var targetNode = parsed;
+  if (rootObj->hasProperty("patch_or_params") && rootObj->getProperty("patch_or_params").isObject())
+    targetNode = rootObj->getProperty("patch_or_params");
+  else if (rootObj->hasProperty("target_patch") && rootObj->getProperty("target_patch").isObject())
+    targetNode = rootObj->getProperty("target_patch");
+  else if (rootObj->hasProperty("settings") && rootObj->getProperty("settings").isObject())
+    targetNode = rootObj->getProperty("settings");
+
+  extractTargets(extractTargets, targetNode, "");
+
+  mopo::control_map currentControls = synth_.getControls();
+  int morphedCount = 0;
+  for (const auto& pair : targetControls) {
+    auto it = currentControls.find(pair.first);
+    if (it != currentControls.end() && it->second != nullptr) {
+      float currentVal = it->second->value();
+      float targetVal = pair.second;
+      float morphedVal = mopo::utils::interpolate(currentVal, targetVal, factor);
+      AetherPatchSerializer::applyControl(&synth_, pair.first, morphedVal);
+      morphedCount++;
+    }
+  }
+
+  synth_.flushQueues();
+
+  DynamicObject* resp = new DynamicObject();
+  resp->setProperty("success", true);
+  resp->setProperty("factor", factor);
+  resp->setProperty("parameters_morphed", morphedCount);
+  resp->setProperty("patch_name", synth_.getPatchName());
+  resp->setProperty("message", "Morphed " + String(morphedCount) + " parameter(s) with factor " + String(factor, 2) + ".");
+  return JSON::toString(resp, false).toStdString();
+}
+
+std::string AetherHelmMcpServer::randomizeSection(const std::string& section, float intensity) {
+  intensity = std::clamp(intensity, 0.0f, 1.0f);
+  mopo::control_map controls = synth_.getControls();
+  std::map<std::string, mopo::ValueDetails> allDetails = mopo::Parameters::lookup_.getAllDetails();
+
+  int randomizedCount = 0;
+  for (const auto& pair : allDetails) {
+    const std::string& paramName = pair.first;
+    std::string paramCat = AetherPatchSerializer::getParameterCategory(paramName);
+
+    if (!matchesCategoryFilter(paramCat, section))
+      continue;
+
+    // Safety: don't randomize master output volume to avoid deafening clicks or complete silence
+    if (paramName == "volume" || paramName == "beats_per_minute")
+      continue;
+
+    auto it = controls.find(paramName);
+    if (it == controls.end() || it->second == nullptr)
+      continue;
+
+    float minVal = pair.second.min_value;
+    float maxVal = pair.second.max_value;
+    float currentVal = it->second->value();
+
+    float randFrac = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+    float randTarget = minVal + randFrac * (maxVal - minVal);
+
+    float newVal = mopo::utils::interpolate(currentVal, randTarget, intensity);
+    newVal = std::clamp(newVal, minVal, maxVal);
+
+    AetherPatchSerializer::applyControl(&synth_, paramName, newVal);
+    randomizedCount++;
+  }
+
+  synth_.flushQueues();
+
+  DynamicObject* resp = new DynamicObject();
+  resp->setProperty("success", true);
+  resp->setProperty("section", String(section));
+  resp->setProperty("intensity", intensity);
+  resp->setProperty("parameters_randomized", randomizedCount);
+  resp->setProperty("message", "Randomized " + String(randomizedCount) + " parameter(s) in section '" + String(section) + "' with intensity " + String(intensity, 2) + ".");
+  return JSON::toString(resp, false).toStdString();
+}
+
+std::string AetherHelmMcpServer::describePatch(bool /*verbose*/) {
+  mopo::control_map controls = synth_.getControls();
+
+  auto getVal = [&controls](const std::string& name, float def = 0.0f) -> float {
+    auto it = controls.find(name);
+    return (it != controls.end() && it->second != nullptr) ? it->second->value() : def;
+  };
+
+  std::string name = synth_.getPatchName();
+  std::string author = synth_.getAuthor();
+  if (name.empty()) name = "Init Patch";
+  if (author.empty()) author = "Unknown";
+
+  float cutoff = getVal("cutoff", 64.0f);
+  float res = getVal("resonance", 0.0f);
+  float osc1Vol = getVal("osc_1_volume", 1.0f);
+  float osc2Vol = getVal("osc_2_volume", 0.0f);
+  float subVol = getVal("sub_volume", 0.0f);
+  float noiseVol = getVal("noise_volume", 0.0f);
+  float attack = getVal("amp_attack", 0.01f);
+  float release = getVal("amp_release", 0.2f);
+  float filterStyle = getVal("filter_style", 0.0f);
+
+  std::string style;
+  if (cutoff < 55.0f && (subVol > 0.3f || osc1Vol > 0.5f) && attack < 0.05f) {
+    style = "Bass";
+  } else if (attack > 0.3f || release > 1.5f) {
+    style = "Pad / Atmospheric";
+  } else if (attack < 0.02f && release < 0.35f) {
+    style = "Pluck / Percussive Lead";
+  } else {
+    style = "Lead / Synth";
+  }
+
+  Array<var> activeFx;
+  if (getVal("distortion_on", 0.0f) > 0.5f) activeFx.add("Distortion");
+  if (getVal("delay_on", 0.0f) > 0.5f) activeFx.add("Delay");
+  if (getVal("reverb_on", 0.0f) > 0.5f) activeFx.add("Reverb");
+  if (getVal("stutter_on", 0.0f) > 0.5f) activeFx.add("Stutter");
+
+  int modCount = synth_.getEngine()->numModulations();
+
+  std::ostringstream desc;
+  desc << "### AetherHelm Patch: " << name << "\n"
+       << "**Author:** " << author << "\n"
+       << "**Sonic Profile:** " << style << "\n\n"
+       << "**Oscillator Setup:**\n"
+       << "- Osc 1 Vol: " << osc1Vol << ", Osc 2 Vol: " << osc2Vol
+       << ", Sub Vol: " << subVol << ", Noise Vol: " << noiseVol << "\n\n"
+       << "**Filter Section:**\n"
+       << "- Style: " << (filterStyle == 0.0f ? "12dB State Variable" : (filterStyle == 1.0f ? "24dB State Variable" : "Formant/Ladder"))
+       << ", Cutoff: " << cutoff << " st, Resonance: " << res << "\n\n"
+       << "**Envelope Timing:**\n"
+       << "- Amp Attack: " << attack << " s, Amp Release: " << release << " s\n\n"
+       << "**Active Effects:** " << (activeFx.isEmpty() ? "None" : JSON::toString(activeFx).toStdString()) << "\n"
+       << "**Active Modulations:** " << modCount << " routed connection(s).";
+
+  DynamicObject* resp = new DynamicObject();
+  resp->setProperty("success", true);
+  resp->setProperty("patch_name", String(name));
+  resp->setProperty("author", String(author));
+  resp->setProperty("sonic_profile", String(style));
+  resp->setProperty("description", String(desc.str()));
+  resp->setProperty("active_effects", activeFx);
+  resp->setProperty("modulations_count", modCount);
+
+  return JSON::toString(resp, true).toStdString();
+}
+
+std::string AetherHelmMcpServer::validatePatch(const std::string& candidatePatchJson) {
+  var parsed;
+  Result res = JSON::parse(String(candidatePatchJson), parsed);
+  if (res.failed() || !parsed.isObject()) {
+    DynamicObject* errResp = new DynamicObject();
+    errResp->setProperty("valid", false);
+    Array<var> errs;
+    errs.add("JSON parse error: " + res.getErrorMessage());
+    errResp->setProperty("errors", errs);
+    return JSON::toString(errResp, false).toStdString();
+  }
+
+  Array<var> errors;
+  Array<var> warnings;
+  int checked = 0;
+
+  DynamicObject* rootObj = parsed.getDynamicObject();
+  std::map<std::string, mopo::ValueDetails> allDetails = mopo::Parameters::lookup_.getAllDetails();
+
+  auto validateKeyVal = [&](const std::string& key, const var& val) {
+    checked++;
+    std::string resolved = AetherPatchSerializer::resolveAlias(key);
+    if (resolved.empty()) resolved = key;
+
+    auto it = allDetails.find(resolved);
+    if (it == allDetails.end()) {
+      warnings.add("Unknown or unmapped parameter: '" + String(key) + "'");
+      return;
+    }
+
+    if (val.isDouble() || val.isInt() || val.isInt64()) {
+      double d = (double)val;
+      if (std::isnan(d) || std::isinf(d)) {
+        errors.add("Non-finite numeric value (NaN/Inf) for parameter '" + String(key) + "'");
+      } else if (d < it->second.min_value - 0.001 || d > it->second.max_value + 0.001) {
+        warnings.add("Parameter '" + String(key) + "' value " + String(d) +
+                     " exceeds valid range [" + String(it->second.min_value) + ", " +
+                     String(it->second.max_value) + "] (will be clamped)");
+      }
+    }
+  };
+
+  if (rootObj->hasProperty("settings") && rootObj->getProperty("settings").isObject()) {
+    DynamicObject* s = rootObj->getProperty("settings").getDynamicObject();
+    for (const auto& p : s->getProperties()) {
+      validateKeyVal(p.name.toString().toStdString(), p.value);
+    }
+  }
+
+  if (rootObj->hasProperty("modulations") && rootObj->getProperty("modulations").isArray()) {
+    Array<var>* mods = rootObj->getProperty("modulations").getArray();
+    for (int i = 0; i < mods->size(); ++i) {
+      var mVar = (*mods)[i];
+      if (!mVar.isObject()) {
+        errors.add("Modulation at index " + String(i) + " is not an object.");
+        continue;
+      }
+      DynamicObject* m = mVar.getDynamicObject();
+      if (!m->hasProperty("source") || !m->hasProperty("destination") || !m->hasProperty("amount")) {
+        errors.add("Modulation at index " + String(i) + " missing source, destination, or amount.");
+      } else {
+        std::string src = m->getProperty("source").toString().toStdString();
+        std::string dst = m->getProperty("destination").toString().toStdString();
+        std::string resSrc = AetherPatchSerializer::resolveModulationSourceAlias(src);
+        std::string resDst = AetherPatchSerializer::resolveAlias(dst);
+        if (resSrc.empty()) errors.add("Invalid modulation source: '" + String(src) + "'");
+        if (allDetails.find(resDst) == allDetails.end()) warnings.add("Unknown modulation destination: '" + String(dst) + "'");
+      }
+    }
+  }
+
+  bool valid = errors.isEmpty();
+  DynamicObject* resp = new DynamicObject();
+  resp->setProperty("valid", valid);
+  resp->setProperty("errors", errors);
+  resp->setProperty("warnings", warnings);
+  resp->setProperty("parameters_checked", checked);
+  return JSON::toString(resp, true).toStdString();
+}
+
 bool AetherHelmMcpServer::installDesktopConfigs(bool claude, bool cursor, bool windsurf, bool cline) {
   File selfExe = File::getSpecialLocation(File::currentExecutableFile);
   String exePath = selfExe.getFullPathName();
@@ -598,6 +861,69 @@ std::string AetherHelmMcpServer::getToolsListJson() {
             }
           }
         }
+      },
+      {
+        "name": "morph_patch",
+        "description": "Smoothly interpolates parameters between current synthesizer state and a target patch or settings object using a blend factor (0.0 = current patch, 1.0 = target patch).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "target_patch": {
+              "type": "object",
+              "description": "Target patch JSON object or settings dictionary."
+            },
+            "factor": {
+              "type": "number",
+              "description": "Morph blend factor between 0.0 (no change) and 1.0 (fully target)."
+            }
+          },
+          "required": ["target_patch", "factor"]
+        }
+      },
+      {
+        "name": "randomize_section",
+        "description": "Randomizes synthesizer parameters within a specified module section ('filter', 'oscillators', 'envelopes', 'modulators', 'effects', or 'all') by a controllable intensity factor, keeping audio levels and critical DSP bounds safe.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "section": {
+              "type": "string",
+              "enum": ["all", "oscillators", "filter", "envelopes", "modulators", "effects"],
+              "description": "Synthesizer section or category to randomize. Default is 'all'."
+            },
+            "intensity": {
+              "type": "number",
+              "description": "Randomization intensity from 0.0 (subtle deviation) to 1.0 (full random). Default is 0.5."
+            }
+          }
+        }
+      },
+      {
+        "name": "describe_patch",
+        "description": "Analyzes the current active patch state, synthesizing a sonic character profile, timbre classification (Lead, Bass, Pad, Pluck), oscillator setup, filtering characteristics, and modulation summary.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "verbose": {
+              "type": "boolean",
+              "description": "Whether to include detailed descriptions. Default is false."
+            }
+          }
+        }
+      },
+      {
+        "name": "validate_patch",
+        "description": "Validates a candidate patch JSON object against AetherHelm schema, verifying parameter ranges, resolving aliases, and detecting non-finite floats (NaN/Inf) or invalid modulation routes.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "patch": {
+              "type": "object",
+              "description": "Candidate patch JSON object to validate."
+            }
+          },
+          "required": ["patch"]
+        }
       }
     ]
   })json";
@@ -726,6 +1052,41 @@ void AetherHelmMcpServer::handleJsonRpcMessage(const std::string& msg) {
         else if (a->hasProperty("sec")) dur = static_cast<float>(a->getProperty("sec"));
       }
       resultText = triggerPreviewNote(note, vel, dur);
+    } else if (toolName == "morph_patch") {
+      std::string targetJson = "{}";
+      float factor = 0.5f;
+      if (argsVar.isObject()) {
+        DynamicObject* a = argsVar.getDynamicObject();
+        if (a->hasProperty("target_patch")) targetJson = JSON::toString(a->getProperty("target_patch")).toStdString();
+        else if (a->hasProperty("patch")) targetJson = JSON::toString(a->getProperty("patch")).toStdString();
+        else targetJson = JSON::toString(argsVar).toStdString();
+        if (a->hasProperty("factor")) factor = static_cast<float>(a->getProperty("factor"));
+      }
+      resultText = morphPatch(targetJson, factor);
+    } else if (toolName == "randomize_section") {
+      std::string sec = "all";
+      float intensity = 0.5f;
+      if (argsVar.isObject()) {
+        DynamicObject* a = argsVar.getDynamicObject();
+        if (a->hasProperty("section")) sec = a->getProperty("section").toString().toStdString();
+        if (a->hasProperty("intensity")) intensity = static_cast<float>(a->getProperty("intensity"));
+      }
+      resultText = randomizeSection(sec, intensity);
+    } else if (toolName == "describe_patch") {
+      bool verbose = false;
+      if (argsVar.isObject()) {
+        DynamicObject* a = argsVar.getDynamicObject();
+        if (a->hasProperty("verbose")) verbose = (bool)a->getProperty("verbose");
+      }
+      resultText = describePatch(verbose);
+    } else if (toolName == "validate_patch") {
+      std::string candJson = "{}";
+      if (argsVar.isObject()) {
+        DynamicObject* a = argsVar.getDynamicObject();
+        if (a->hasProperty("patch")) candJson = JSON::toString(a->getProperty("patch")).toStdString();
+        else candJson = JSON::toString(argsVar).toStdString();
+      }
+      resultText = validatePatch(candJson);
     } else {
       sendError(idStr, -32601, "Unknown tool: " + toolName);
       return;

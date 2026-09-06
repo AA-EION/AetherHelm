@@ -148,7 +148,7 @@ void FormantResponse::computeFilterCoefficients() {
   for (int i = 0; i < formant_filter_.num_formants(); ++i) {
     double frequency = mopo::utils::midiNoteToFrequency(cutoff_sliders_[i]->getValue());
     double resonance = mopo::utils::magnitudeToQ(resonance_sliders_[i]->getValue());
-    double decibels = mopo::utils::interpolate(MIN_GAIN_DB, MAX_GAIN_DB, gain_sliders_[i]->getValue());
+    double decibels = mopo::utils::interpolate<double>(MIN_GAIN_DB, MAX_GAIN_DB, gain_sliders_[i]->getValue());
     double gain = mopo::utils::dbToGain(decibels);
 
     formant_filter_.getFormant(i)->computeCoefficients(mopo::BiquadFilter::kGainedBandPass,

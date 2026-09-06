@@ -25,6 +25,12 @@ public:
   std::string getModulationMatrix(const std::string& filterSource = "", const std::string& filterDest = "");
   std::string triggerPreviewNote(int noteNumber = 60, float velocity = 0.8f, float durationSeconds = 1.0f);
 
+  // High-level macro and validation tools
+  std::string morphPatch(const std::string& targetPatchOrParamsJson, float factor);
+  std::string randomizeSection(const std::string& section = "all", float intensity = 0.5f);
+  std::string describePatch(bool verbose = false);
+  std::string validatePatch(const std::string& candidatePatchJson);
+
   // JSON-RPC and MCP protocol helpers
   void handleJsonRpcMessage(const std::string& message);
   std::string getToolsListJson();

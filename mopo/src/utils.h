@@ -22,6 +22,7 @@
 #include "value.h"
 #include <cmath>
 #include <cstdlib>
+#include <type_traits>
 
 #if defined(_MSC_VER)
 #include <intrin.h>
@@ -135,6 +136,12 @@ namespace mopo {
 
     inline float interpolate(float from, float to, float t) {
       return fmaf(t, to - from, from);
+    }
+
+    template <typename T, typename U, typename V>
+    inline auto interpolate(T from, U to, V t) -> std::common_type_t<T, U, V> {
+      using Common = std::common_type_t<T, U, V>;
+      return static_cast<Common>(t) * (static_cast<Common>(to) - static_cast<Common>(from)) + static_cast<Common>(from);
     }
 
     inline mopo_float mod(double value, double* integral) {
