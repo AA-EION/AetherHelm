@@ -2,6 +2,10 @@
 ; AetherHelm Modern Inno Setup Installer Script
 ; ==============================================================================
 
+#ifndef AppArch
+  #define AppArch "x64"
+#endif
+
 #define MyAppName "AetherHelm"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "AA-EION"
@@ -19,7 +23,7 @@ AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-OutputBaseFilename=AetherHelm-Windows-x64-Setup
+OutputBaseFilename=AetherHelm-Windows-{#AppArch}-Setup
 OutputDir=..\..\dist
 Compression=lzma2/ultra64
 SolidCompression=yes

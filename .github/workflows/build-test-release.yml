@@ -35,7 +35,7 @@ jobs:
             artifact_name: AetherHelm-macOS-Universal
             archive_ext: zip
           # Windows amd64 (x64)
-          - os: windows-latest
+          - os: windows-2022
             arch: x64
             cmake_arch: x64
             artifact_name: AetherHelm-Windows-x64
@@ -95,15 +95,26 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_OSX_ARCHITECTURES="${{ matrix.osx_arch }}"
 
+      # Install Inno Setup on Windows for professional installer compilation
+      - name: Install Inno Setup (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          try {
+            choco install -y innosetup
+            $innoPath = "C:\Program Files (x86)\Inno Setup 6"
+            if (Test-Path $innoPath) {
+              echo $innoPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            }
+          } catch {
+            Write-Warning "Inno Setup installation skipped: $_"
+          }
+
       # Windows MSVC setup (x64 or ARM64)
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: |
-          cmake -B build -G "Visual Studio 17 2022" -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
-          if ($LASTEXITCODE -ne 0) {
-            cmake -B build -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
-          }
+        run: cmake -B build -G "Visual Studio 17 2022" -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
 
       # Compilation with memory and concurrency throttling (-j 4 / --parallel 4)
       - name: Build All Targets (Plugin, MCP Server, Tests)
@@ -142,8 +153,15 @@ jobs:
           }
           Get-ChildItem -Path build -Filter "aetherhelm-mcp.exe" -Recurse | ForEach-Object { Copy-Item $_.FullName -Destination dist }
           Copy-Item -Recurse scripts dist/
-          if (Get-Command iscc -ErrorAction SilentlyContinue) {
-            iscc installers/windows/installer.iss
+          $iscc = Get-Command iscc -ErrorAction SilentlyContinue
+          if (-not $iscc -and (Test-Path "C:\Program Files (x86)\Inno Setup 6\iscc.exe")) {
+            $iscc = "C:\Program Files (x86)\Inno Setup 6\iscc.exe"
+          }
+          if ($iscc) {
+            Write-Host "Compiling Windows Installer with Inno Setup..."
+            & $iscc /DAppArch=${{ matrix.arch }} installers/windows/installer.iss
+          } else {
+            Write-Warning "Inno Setup (iscc) not found; packaging zip archive only."
           }
           Compress-Archive -Path dist/* -DestinationPath "${{ matrix.artifact_name }}.zip"
 
