@@ -27,19 +27,12 @@ jobs:
             cmake_arch: ""
             artifact_name: AetherHelm-Linux-arm64
             archive_ext: tar.gz
-          # macOS x86_64 (Intel)
-          - os: macos-15-intel
-            arch: x86_64
-            cmake_arch: ""
-            osx_arch: x86_64
-            artifact_name: AetherHelm-macOS-x86_64
-            archive_ext: zip
-          # macOS arm64 (Apple Silicon)
+          # macOS Universal (x86_64 + arm64); built on macOS 14 for JUCE 7.0.12 SDK compatibility
           - os: macos-14
-            arch: arm64
+            arch: universal
             cmake_arch: ""
-            osx_arch: arm64
-            artifact_name: AetherHelm-macOS-arm64
+            osx_arch: "x86_64;arm64"
+            artifact_name: AetherHelm-macOS-Universal
             archive_ext: zip
           # Windows amd64 (x64)
           - os: windows-2022
@@ -93,7 +86,7 @@ jobs:
         run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.osx_arch }}
+            -DCMAKE_OSX_ARCHITECTURES="${{ matrix.osx_arch }}"
 
       # Windows MSVC setup (x64 or ARM64)
       - name: Configure CMake (Windows)
