@@ -1,0 +1,143 @@
+name: CI/CD Multi-Platform Build & Release
+
+on:
+  push:
+    branches: [ master, main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build:
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: AetherHelm-Linux
+            archive_ext: tar.gz
+          - os: macos-latest
+            artifact_name: AetherHelm-macOS-Universal
+            archive_ext: zip
+          - os: windows-latest
+            artifact_name: AetherHelm-Windows-x64
+            archive_ext: zip
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Linux Dependencies
+      - name: Install Linux audio and graphical dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libjack-jackd2-dev \
+            libfreetype6-dev \
+            libx11-dev \
+            libxcomposite-dev \
+            libxcursor-dev \
+            libxinerama-dev \
+            libxrandr-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libcurl4-openssl-dev \
+            ninja-build
+
+      # macOS universal binary setup
+      - name: Configure CMake (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+
+      # Windows MSVC setup
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -B build \
+            -G "Visual Studio 17 2022" \
+            -A x64 \
+            -DCMAKE_BUILD_TYPE=Release
+
+      # Linux setup
+      - name: Configure CMake (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release
+
+      # Compilation
+      - name: Build All Targets (Plugin, MCP Server, Tests)
+        run: cmake --build build --config Release --parallel
+
+      # Automated Testing
+      - name: Run Test Suite
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      # Packaging Linux
+      - name: Package Artifacts (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist
+          cp -r build/AetherHelm_artefacts/Release/* dist/ 2>/dev/null || true
+          cp build/aetherhelm-mcp dist/
+          cp -r scripts dist/
+          tar -czf ${{ matrix.artifact_name }}.tar.gz -C dist .
+
+      # Packaging macOS
+      - name: Package Artifacts (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist
+          cp -r build/AetherHelm_artefacts/Release/* dist/ 2>/dev/null || true
+          cp build/aetherhelm-mcp dist/ 2>/dev/null || cp build/Release/aetherhelm-mcp dist/
+          cp -r scripts dist/
+          cd dist && zip -r ../${{ matrix.artifact_name }}.zip .
+
+      # Packaging Windows
+      - name: Package Artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Get-ChildItem -Path build/AetherHelm_artefacts/Release -Recurse | Copy-Item -Destination dist -Recurse -ErrorAction SilentlyContinue
+          Copy-Item build/Release/aetherhelm-mcp.exe dist/ -ErrorAction SilentlyContinue
+          Copy-Item -Recurse scripts dist/
+          Compress-Archive -Path dist/* -DestinationPath "${{ matrix.artifact_name }}.zip"
+
+      # Upload CI Artifact
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}.${{ matrix.archive_ext }}
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            */*.tar.gz
+            */*.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
