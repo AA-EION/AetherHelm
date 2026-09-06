@@ -77,6 +77,8 @@ jobs:
             libegl-dev \
             ladspa-sdk \
             libcurl4-openssl-dev \
+            curl \
+            file \
             ninja-build
 
       # Linux setup

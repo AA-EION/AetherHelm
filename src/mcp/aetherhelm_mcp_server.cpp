@@ -453,8 +453,8 @@ std::string AetherHelmMcpServer::randomizeSection(const std::string& section, fl
     if (it == controls.end() || it->second == nullptr)
       continue;
 
-    float minVal = pair.second.min_value;
-    float maxVal = pair.second.max_value;
+    float minVal = pair.second.min;
+    float maxVal = pair.second.max;
     float currentVal = it->second->value();
 
     float randFrac = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
@@ -486,8 +486,8 @@ std::string AetherHelmMcpServer::describePatch(bool /*verbose*/) {
     return (it != controls.end() && it->second != nullptr) ? it->second->value() : def;
   };
 
-  std::string name = synth_.getPatchName();
-  std::string author = synth_.getAuthor();
+  std::string name = synth_.getPatchName().toStdString();
+  std::string author = synth_.getAuthor().toStdString();
   if (name.empty()) name = "Init Patch";
   if (author.empty()) author = "Unknown";
 
@@ -585,10 +585,10 @@ std::string AetherHelmMcpServer::validatePatch(const std::string& candidatePatch
       double d = (double)val;
       if (std::isnan(d) || std::isinf(d)) {
         errors.add("Non-finite numeric value (NaN/Inf) for parameter '" + String(key) + "'");
-      } else if (d < it->second.min_value - 0.001 || d > it->second.max_value + 0.001) {
+      } else if (d < it->second.min - 0.001 || d > it->second.max + 0.001) {
         warnings.add("Parameter '" + String(key) + "' value " + String(d) +
-                     " exceeds valid range [" + String(it->second.min_value) + ", " +
-                     String(it->second.max_value) + "] (will be clamped)");
+                     " exceeds valid range [" + String(it->second.min) + ", " +
+                     String(it->second.max) + "] (will be clamped)");
       }
     }
   };
