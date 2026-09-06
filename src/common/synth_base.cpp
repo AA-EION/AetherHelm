@@ -16,6 +16,7 @@
 
 #include "synth_base.h"
 
+#include "aether_patch_serializer.h"
 #include "load_save.h"
 #include "startup.h"
 #include "synth_gui_interface.h"
@@ -179,6 +180,22 @@ bool SynthBase::loadFromFile(File patch) {
     return true;
   }
   return false;
+}
+
+bool SynthBase::loadPatchFromJson(const std::string& jsonString, std::string* error) {
+  ScopedLock lock(getCriticalSection());
+  bool result = AetherPatchSerializer::loadPatchFromJson(this, jsonString, error);
+  SynthGuiInterface* gui_interface = getGuiInterface();
+  if (result && gui_interface) {
+    gui_interface->updateFullGui();
+    gui_interface->notifyFresh();
+  }
+  return result;
+}
+
+std::string SynthBase::exportPatchToJson(bool hierarchical) {
+  ScopedLock lock(getCriticalSection());
+  return AetherPatchSerializer::exportPatchToJson(this, hierarchical);
 }
 
 bool SynthBase::exportToFile() {
