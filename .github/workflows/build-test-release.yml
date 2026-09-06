@@ -27,11 +27,19 @@ jobs:
             cmake_arch: ""
             artifact_name: AetherHelm-Linux-arm64
             archive_ext: tar.gz
-          # macOS Universal (x86_64 + arm64)
-          - os: macos-14
-            arch: universal
+          # macOS x86_64 (Intel)
+          - os: macos-15-intel
+            arch: x86_64
             cmake_arch: ""
-            artifact_name: AetherHelm-macOS-Universal
+            osx_arch: x86_64
+            artifact_name: AetherHelm-macOS-x86_64
+            archive_ext: zip
+          # macOS arm64 (Apple Silicon)
+          - os: macos-14
+            arch: arm64
+            cmake_arch: ""
+            osx_arch: arm64
+            artifact_name: AetherHelm-macOS-arm64
             archive_ext: zip
           # Windows amd64 (x64)
           - os: windows-2022
@@ -79,13 +87,13 @@ jobs:
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release
 
-      # macOS universal binary setup (x86_64 + arm64)
+      # macOS native build (x86_64 or arm64)
       - name: Configure CMake (macOS)
         if: runner.os == 'macOS'
         run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.osx_arch }}
 
       # Windows MSVC setup (x64 or ARM64)
       - name: Configure CMake (Windows)
@@ -95,7 +103,7 @@ jobs:
 
       # Compilation
       - name: Build All Targets (Plugin, MCP Server, Tests)
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Release --parallel 4
 
       # Automated Testing
       - name: Run Test Suite
