@@ -5,15 +5,18 @@
 class HeadlessSynth : public SynthBase {
 public:
   HeadlessSynth() {
-    engine_.init();
     engine_.setSampleRate(44100);
     engine_.setBufferSize(256);
     loadInitPatch();
   }
 
-  void renderBlock() {
+  void flushQueues() {
     processControlChanges();
     processModulationChanges();
+  }
+
+  void renderBlock() {
+    flushQueues();
     engine_.process();
   }
 

@@ -79,11 +79,14 @@ AetherHelm features a dedicated AI generation interface allowing you to describe
 AetherHelm includes a standalone MCP server (`aetherhelm-mcp`) enabling LLMs in desktop environments to act as an automated sound designer.
 
 ### Supported MCP Tools
-- `get_current_patch`: Inspects current synthesizer state, oscillator parameters, filter cutoffs, and active modulation matrix.
-- `set_patch_parameters`: Modifies specific parameters or injects full patches dynamically.
-- `list_available_parameters`: Lists all addressable synth parameters with ranges, defaults, and descriptions.
-- `trigger_preview_note`: Renders and previews MIDI audition notes programmatically.
-- `generate_patch_from_prompt`: Generates a complete preset from a natural language prompt via OpenRouter.
+- `get_current_patch`: Inspects active synthesizer preset and modulation matrix, supporting both flat (`settings`) and structured/hierarchical (`oscillators`, `filter`, `envelopes`, `modulators`, `effects`, `global`) layouts.
+- `set_patch_parameters`: Granular and batch synthesizer parameter adjustment with intelligent alias resolution (e.g. `filter_cutoff` -> `cutoff`, `reverb_size` -> `reverb_feedback`), hierarchical module support, and automatic DSP range clamping.
+- `list_available_parameters`: Comprehensive schema discovery and parameter documentation (min/max bounds, defaults, display units, functional sound design descriptions, and category filtering).
+- `get_parameter_details`: Inspects specific parameters or batches with alias resolution, providing active patch values, valid bounds, units, descriptions, and module categorization.
+- `add_modulation`: Connects modulation sources (`mono_lfo_1`, `poly_lfo`, `mod_envelope`, `velocity`, `note`, `mod_wheel`, etc.) to destination parameters with bipolar depth clamping (-1.0 to +1.0).
+- `remove_modulation`: Disconnects an existing modulation routing connection between a source and destination parameter.
+- `get_modulation_matrix`: Queries all active modulation routes, returning connected sources, destinations, amounts, and all available modulation sources.
+- `trigger_preview_note`: Synthesizes an audition MIDI note to preview audio output, returning peak amplitude, peak dBFS, RMS level, RMS dBFS, and clipping detection.
 
 ### Auto-Configuration for Desktop AI
 

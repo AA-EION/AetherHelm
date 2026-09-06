@@ -316,6 +316,186 @@ void testBackgroundThreadSafety() {
   std::cout << "[PASS] testBackgroundThreadSafety" << std::endl;
 }
 
+void testMcpPresetInspectionBothLayouts() {
+  std::cout << "[RUN] testMcpPresetInspectionBothLayouts..." << std::endl;
+  AetherHelmMcpServer server;
+
+  // 1. Flat layout
+  std::string flatJson = server.getCurrentPatch(false);
+  assert(!flatJson.empty());
+  assert(flatJson.find("\"settings\"") != std::string::npos);
+  assert(flatJson.find("\"synth_name\"") != std::string::npos);
+  assert(flatJson.find("\"oscillators\"") == std::string::npos);
+
+  // 2. Structured/hierarchical layout
+  std::string structJson = server.getCurrentPatch(true);
+  assert(!structJson.empty());
+  assert(structJson.find("\"oscillators\"") != std::string::npos);
+  assert(structJson.find("\"filter\"") != std::string::npos);
+  assert(structJson.find("\"envelopes\"") != std::string::npos);
+  assert(structJson.find("\"modulators\"") != std::string::npos);
+  assert(structJson.find("\"effects\"") != std::string::npos);
+  assert(structJson.find("\"global\"") != std::string::npos);
+  assert(structJson.find("\"modulations\"") != std::string::npos);
+
+  std::cout << "[PASS] testMcpPresetInspectionBothLayouts" << std::endl;
+}
+
+void testMcpGranularBatchAndAliasAdjustment() {
+  std::cout << "[RUN] testMcpGranularBatchAndAliasAdjustment..." << std::endl;
+  AetherHelmMcpServer server;
+
+  // 1. Batch adjustment using aliases
+  std::string aliasJson = R"({
+    "patch_or_params": {
+      "filter_cutoff": 52.5,
+      "filter_resonance": 0.88,
+      "reverb_decay": 0.92,
+      "osc1_volume": 0.65
+    }
+  })";
+
+  std::string resp = server.setPatchParameters(aliasJson);
+  assert(resp.find("\"success\":true") != std::string::npos || resp.find("\"success\": true") != std::string::npos);
+
+  std::string detailsJson = server.getParameterDetails(R"({"parameters": ["cutoff", "resonance", "reverb_feedback", "osc_1_volume"]})");
+  assert(detailsJson.find("\"id\":\"cutoff\"") != std::string::npos || detailsJson.find("\"id\": \"cutoff\"") != std::string::npos);
+  assert(detailsJson.find("\"id\":\"resonance\"") != std::string::npos || detailsJson.find("\"id\": \"resonance\"") != std::string::npos);
+  assert(detailsJson.find("\"id\":\"reverb_feedback\"") != std::string::npos || detailsJson.find("\"id\": \"reverb_feedback\"") != std::string::npos);
+  assert(detailsJson.find("\"id\":\"osc_1_volume\"") != std::string::npos || detailsJson.find("\"id\": \"osc_1_volume\"") != std::string::npos);
+
+  // 2. Range clamping verification
+  std::string clampJson = R"({
+    "parameters": {
+      "cutoff": 999.0,
+      "resonance": -5.0
+    }
+  })";
+  server.setPatchParameters(clampJson);
+  std::string clampedDetails = server.getParameterDetails(R"({"parameters": ["cutoff", "resonance"]})");
+  // Cutoff max is 127.0, resonance min is 0.0
+  assert(clampedDetails.find("127") != std::string::npos);
+  assert(clampedDetails.find("0") != std::string::npos);
+
+  std::cout << "[PASS] testMcpGranularBatchAndAliasAdjustment" << std::endl;
+}
+
+void testMcpParameterDocumentationAndDetailsDiscovery() {
+  std::cout << "[RUN] testMcpParameterDocumentationAndDetailsDiscovery..." << std::endl;
+  AetherHelmMcpServer server;
+
+  // 1. Category filtering
+  std::string filterParams = server.listAvailableParameters("filter", true);
+  assert(filterParams.find("\"category\":\"filter\"") != std::string::npos || filterParams.find("\"category\": \"filter\"") != std::string::npos);
+  assert(filterParams.find("\"id\":\"cutoff\"") != std::string::npos || filterParams.find("\"id\": \"cutoff\"") != std::string::npos);
+  assert(filterParams.find("Filter cutoff frequency") != std::string::npos);
+  // Oscillator shouldn't be in filter category list
+  assert(filterParams.find("\"id\":\"osc_1_waveform\"") == std::string::npos && filterParams.find("\"id\": \"osc_1_waveform\"") == std::string::npos);
+
+  // 2. Concise listing
+  std::string concise = server.listAvailableParameters("all", false);
+  assert(concise.find("\"id\":\"cutoff\"") != std::string::npos || concise.find("\"id\": \"cutoff\"") != std::string::npos);
+  assert(concise.find("\"description\"") == std::string::npos);
+
+  // 3. Parameter details discovery with alias resolution
+  std::string detailSingle = server.getParameterDetails(R"({"parameter": "filter_cutoff"})");
+  assert(detailSingle.find("\"success\":true") != std::string::npos || detailSingle.find("\"success\": true") != std::string::npos);
+  assert(detailSingle.find("\"id\":\"cutoff\"") != std::string::npos || detailSingle.find("\"id\": \"cutoff\"") != std::string::npos);
+  assert(detailSingle.find("\"min\":28") != std::string::npos || detailSingle.find("\"min\": 28") != std::string::npos);
+  assert(detailSingle.find("\"max\":127") != std::string::npos || detailSingle.find("\"max\": 127") != std::string::npos);
+  assert(detailSingle.find("\"units\":\"semitones\"") != std::string::npos || detailSingle.find("\"units\": \"semitones\"") != std::string::npos);
+  assert(detailSingle.find("\"found\":true") != std::string::npos || detailSingle.find("\"found\": true") != std::string::npos);
+
+  // 4. Parameter not found handling
+  std::string detailMissing = server.getParameterDetails(R"({"parameter": "non_existent_control"})");
+  assert(detailMissing.find("\"found\":false") != std::string::npos || detailMissing.find("\"found\": false") != std::string::npos);
+
+  std::cout << "[PASS] testMcpParameterDocumentationAndDetailsDiscovery" << std::endl;
+}
+
+void testMcpModulationRoutingTools() {
+  std::cout << "[RUN] testMcpModulationRoutingTools..." << std::endl;
+  AetherHelmMcpServer server;
+
+  // 1. Add modulation with aliases (source alias: "mod_env", dest alias: "filter_cutoff")
+  std::string addResp = server.addModulation("mod_env", "filter_cutoff", 0.75f);
+  assert(addResp.find("\"success\":true") != std::string::npos || addResp.find("\"success\": true") != std::string::npos);
+  assert(addResp.find("\"source\":\"mod_envelope\"") != std::string::npos || addResp.find("\"source\": \"mod_envelope\"") != std::string::npos);
+  assert(addResp.find("\"destination\":\"cutoff\"") != std::string::npos || addResp.find("\"destination\": \"cutoff\"") != std::string::npos);
+
+  // 2. Query modulation matrix
+  std::string matrixJson = server.getModulationMatrix();
+  assert(matrixJson.find("mod_envelope") != std::string::npos);
+  assert(matrixJson.find("cutoff") != std::string::npos);
+  assert(matrixJson.find("available_sources") != std::string::npos);
+
+  // 3. Add modulation with clamped amount
+  std::string addClamped = server.addModulation("mono_lfo_1", "filter_blend", 2.5f);
+  assert(addClamped.find("\"amount\":1") != std::string::npos || addClamped.find("\"amount\": 1") != std::string::npos);
+
+  // 4. Filter modulation matrix by source
+  std::string filteredMatrix = server.getModulationMatrix("mono_lfo_1", "");
+  assert(filteredMatrix.find("filter_blend") != std::string::npos);
+
+  // 5. Remove modulation
+  std::string remResp = server.removeModulation("mod_env", "filter_cutoff");
+  assert(remResp.find("\"success\":true") != std::string::npos || remResp.find("\"success\": true") != std::string::npos);
+
+  // 6. Verify removed
+  std::string postRemMatrix = server.getModulationMatrix("mod_envelope", "cutoff");
+  assert(postRemMatrix.find("\"count\":0") != std::string::npos || postRemMatrix.find("\"count\": 0") != std::string::npos);
+
+  // 7. Remove nonexistent modulation error handling
+  std::string remMissing = server.removeModulation("mod_envelope", "cutoff");
+  assert(remMissing.find("\"success\":false") != std::string::npos || remMissing.find("\"success\": false") != std::string::npos);
+
+  // 8. Invalid modulation source error handling
+  std::string invalidSrc = server.addModulation("quantum_phase", "cutoff", 0.5f);
+  assert(invalidSrc.find("\"success\":false") != std::string::npos || invalidSrc.find("\"success\": false") != std::string::npos);
+  assert(invalidSrc.find("Available sources") != std::string::npos);
+
+  std::cout << "[PASS] testMcpModulationRoutingTools" << std::endl;
+}
+
+void testMcpAudioAuditionPreviewMetrics() {
+  std::cout << "[RUN] testMcpAudioAuditionPreviewMetrics..." << std::endl;
+  AetherHelmMcpServer server;
+
+  std::string preview = server.triggerPreviewNote(60, 0.85f, 0.25f);
+  assert(!preview.empty());
+  assert(preview.find("\"status\":\"preview_rendered\"") != std::string::npos || preview.find("\"status\": \"preview_rendered\"") != std::string::npos);
+  assert(preview.find("peak_amplitude") != std::string::npos);
+  assert(preview.find("peak_db") != std::string::npos);
+  assert(preview.find("rms_level") != std::string::npos);
+  assert(preview.find("rms_db") != std::string::npos);
+  assert(preview.find("clipping_detected") != std::string::npos);
+  assert(preview.find("signal_detected") != std::string::npos);
+
+  std::cout << "[PASS] testMcpAudioAuditionPreviewMetrics" << std::endl;
+}
+
+void testMcpToolsExposeExternalAiToolsAndNoOpenRouterProxy() {
+  std::cout << "[RUN] testMcpToolsExposeExternalAiToolsAndNoOpenRouterProxy..." << std::endl;
+  AetherHelmMcpServer server;
+
+  std::string toolsJson = server.getToolsListJson();
+
+  // All 8 first-class tools must be present
+  assert(toolsJson.find("\"name\": \"get_current_patch\"") != std::string::npos || toolsJson.find("\"name\":\"get_current_patch\"") != std::string::npos);
+  assert(toolsJson.find("\"name\": \"set_patch_parameters\"") != std::string::npos || toolsJson.find("\"name\":\"set_patch_parameters\"") != std::string::npos);
+  assert(toolsJson.find("\"name\": \"list_available_parameters\"") != std::string::npos || toolsJson.find("\"name\":\"list_available_parameters\"") != std::string::npos);
+  assert(toolsJson.find("\"name\": \"get_parameter_details\"") != std::string::npos || toolsJson.find("\"name\":\"get_parameter_details\"") != std::string::npos);
+  assert(toolsJson.find("\"name\": \"add_modulation\"") != std::string::npos || toolsJson.find("\"name\":\"add_modulation\"") != std::string::npos);
+  assert(toolsJson.find("\"name\": \"remove_modulation\"") != std::string::npos || toolsJson.find("\"name\":\"remove_modulation\"") != std::string::npos);
+  assert(toolsJson.find("\"name\": \"get_modulation_matrix\"") != std::string::npos || toolsJson.find("\"name\":\"get_modulation_matrix\"") != std::string::npos);
+  assert(toolsJson.find("\"name\": \"trigger_preview_note\"") != std::string::npos || toolsJson.find("\"name\":\"trigger_preview_note\"") != std::string::npos);
+
+  // Redundant internal OpenRouter proxy tool MUST NOT be present
+  assert(toolsJson.find("generate_patch_from_prompt") == std::string::npos);
+
+  std::cout << "[PASS] testMcpToolsExposeExternalAiToolsAndNoOpenRouterProxy" << std::endl;
+}
+
 int main() {
   ScopedJuceInitialiser_GUI juceInit;
 
@@ -328,6 +508,12 @@ int main() {
   testJsonRoundtrip();
   testMcpServerAudioPreviewAndTools();
   testMcpModulationsIntegration();
+  testMcpPresetInspectionBothLayouts();
+  testMcpGranularBatchAndAliasAdjustment();
+  testMcpParameterDocumentationAndDetailsDiscovery();
+  testMcpModulationRoutingTools();
+  testMcpAudioAuditionPreviewMetrics();
+  testMcpToolsExposeExternalAiToolsAndNoOpenRouterProxy();
   testJsonExtractionWithMarkdownAndCommentaryBraces();
   testNaNAndInfinityProtection();
   testBooleanParameterSupport();

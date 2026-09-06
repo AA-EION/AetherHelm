@@ -283,6 +283,7 @@ target_compile_definitions(AetherHelm
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
+        JUCE_MODAL_LOOPS_PERMITTED=1
 )
 
 target_link_libraries(AetherHelm
@@ -321,6 +322,8 @@ target_compile_definitions(aetherhelm-mcp
     PRIVATE
         JUCE_STANDALONE_APPLICATION=1
         JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_MODAL_LOOPS_PERMITTED=1
 )
 
 target_link_libraries(aetherhelm-mcp
@@ -365,6 +368,8 @@ target_compile_definitions(aetherhelm-tests
     PRIVATE
         JUCE_STANDALONE_APPLICATION=1
         JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_MODAL_LOOPS_PERMITTED=1
 )
 
 target_link_libraries(aetherhelm-tests

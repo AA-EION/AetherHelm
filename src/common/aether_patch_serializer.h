@@ -21,11 +21,20 @@ public:
   static std::string getParameterDocumentationJson();
   static std::string extractJsonFromText(const std::string& raw);
 
-private:
-  static void parseHierarchicalSection(SynthBase* synth, const var& sectionVar,
-                                       const std::string& prefix = "", int* updatedCount = nullptr);
+  // Parameter and Modulation resolution helpers
+  static std::string resolveParameterName(const std::string& key, const std::string& prefix = "");
+  static std::string resolveModulationSourceName(const std::string& source);
+  static bool isValidModulationSource(const std::string& source);
+  static const std::vector<std::string>& getAvailableModulationSources();
+  static std::string getParameterCategory(const std::string& parameterId);
+  static std::string getParameterDescription(const std::string& parameterId);
+
   static void applyControl(SynthBase* synth, const std::string& name,
                            mopo::mopo_float value, int* updatedCount = nullptr);
   static void applyModulation(SynthBase* synth, const std::string& source,
                               const std::string& dest, mopo::mopo_float amount, int* updatedCount = nullptr);
+
+private:
+  static void parseHierarchicalSection(SynthBase* synth, const var& sectionVar,
+                                       const std::string& prefix = "", int* updatedCount = nullptr);
 };

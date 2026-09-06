@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef JUCE_MODAL_LOOPS_PERMITTED
+#define JUCE_MODAL_LOOPS_PERMITTED 1
+#endif
+
 #include <memory>
 #include <type_traits>
 #include <utility>

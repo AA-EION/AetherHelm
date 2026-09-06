@@ -209,6 +209,7 @@ std::string SynthBase::exportPatchToJson(bool hierarchical) {
 }
 
 bool SynthBase::exportToFile() {
+#if JUCE_MODAL_LOOPS_PERMITTED
   File active_file = getActiveFile();
   FileChooser save_box("Export Patch", File(), String("*.") + mopo::PATCH_EXTENSION);
   if (!save_box.browseForFileToSave(true))
@@ -216,6 +217,9 @@ bool SynthBase::exportToFile() {
 
   saveToFile(save_box.getResult());
   return true;
+#else
+  return false;
+#endif
 }
 
 bool SynthBase::saveToFile(File patch) {

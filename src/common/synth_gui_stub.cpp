@@ -1,3 +1,8 @@
+class FullInterface {
+  public:
+    virtual ~FullInterface() = default;
+};
+
 #include "synth_gui_interface.h"
 
 SynthGuiInterface::SynthGuiInterface(SynthBase* synth, bool) : synth_(synth) { }
