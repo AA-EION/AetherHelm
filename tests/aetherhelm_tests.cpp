@@ -1,3 +1,6 @@
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
 #include <iostream>
 #include <cmath>
@@ -348,23 +351,67 @@ void testMcpGranularBatchAndAliasAdjustment() {
   // 1. Batch adjustment using aliases
   std::string aliasJson = R"({
     "patch_or_params": {
-      "filter_cutoff": 52.5,
-      "filter_resonance": 0.88,
+      "cutoff_frequency": 52.5,
+      "resonance_amount": 0.88,
       "reverb_decay": 0.92,
-      "osc1_volume": 0.65
+      "osc1_vol": 0.65,
+      "sub_vol": 0.40,
+      "noise_level": 0.15
     }
   })";
 
   std::string resp = server.setPatchParameters(aliasJson);
   assert(resp.find("\"success\":true") != std::string::npos || resp.find("\"success\": true") != std::string::npos);
 
-  std::string detailsJson = server.getParameterDetails(R"({"parameters": ["cutoff", "resonance", "reverb_feedback", "osc_1_volume"]})");
+  std::string detailsJson = server.getParameterDetails(R"({"parameters": ["cutoff", "resonance", "reverb_feedback", "osc_1_volume", "sub_volume", "noise_volume"]})");
   assert(detailsJson.find("\"id\":\"cutoff\"") != std::string::npos || detailsJson.find("\"id\": \"cutoff\"") != std::string::npos);
   assert(detailsJson.find("\"id\":\"resonance\"") != std::string::npos || detailsJson.find("\"id\": \"resonance\"") != std::string::npos);
   assert(detailsJson.find("\"id\":\"reverb_feedback\"") != std::string::npos || detailsJson.find("\"id\": \"reverb_feedback\"") != std::string::npos);
   assert(detailsJson.find("\"id\":\"osc_1_volume\"") != std::string::npos || detailsJson.find("\"id\": \"osc_1_volume\"") != std::string::npos);
+  assert(detailsJson.find("\"id\":\"sub_volume\"") != std::string::npos || detailsJson.find("\"id\": \"sub_volume\"") != std::string::npos);
+  assert(detailsJson.find("\"id\":\"noise_volume\"") != std::string::npos || detailsJson.find("\"id\": \"noise_volume\"") != std::string::npos);
 
-  // 2. Range clamping verification
+  // 2. Structured module trees adjustment
+  std::string structSetJson = R"({
+    "filter": {
+      "style": 1.0,
+      "blend": 0.5,
+      "drive": 2.0
+    },
+    "oscillators": {
+      "osc_1": {
+        "waveform": 3.0
+      }
+    }
+  })";
+  std::string structResp = server.setPatchParameters(structSetJson);
+  assert(structResp.find("\"success\":true") != std::string::npos || structResp.find("\"success\": true") != std::string::npos);
+  std::string structDetails = server.getParameterDetails(R"({"parameters": ["filter_style", "filter_blend", "filter_drive", "osc_1_waveform"]})");
+  assert(structDetails.find("\"id\":\"filter_style\"") != std::string::npos || structDetails.find("\"id\": \"filter_style\"") != std::string::npos);
+  assert(structDetails.find("\"id\":\"filter_blend\"") != std::string::npos || structDetails.find("\"id\": \"filter_blend\"") != std::string::npos);
+  assert(structDetails.find("\"id\":\"filter_drive\"") != std::string::npos || structDetails.find("\"id\": \"filter_drive\"") != std::string::npos);
+  assert(structDetails.find("\"id\":\"osc_1_waveform\"") != std::string::npos || structDetails.find("\"id\": \"osc_1_waveform\"") != std::string::npos);
+
+  // 3. Preset with both settings and modulations preservation
+  std::string fullPatchJson = R"({
+    "patch_name": "Complex Sound",
+    "settings": {
+      "cutoff": 66.0
+    },
+    "modulations": [
+      {
+        "source": "mono_lfo_1",
+        "destination": "cutoff",
+        "amount": 0.45
+      }
+    ]
+  })";
+  server.setPatchParameters(fullPatchJson);
+  std::string currPatch = server.getCurrentPatch();
+  assert(currPatch.find("mono_lfo_1") != std::string::npos);
+  assert(currPatch.find("cutoff") != std::string::npos);
+
+  // 4. Range clamping verification
   std::string clampJson = R"({
     "parameters": {
       "cutoff": 999.0,
@@ -384,9 +431,25 @@ void testMcpParameterDocumentationAndDetailsDiscovery() {
   std::cout << "[RUN] testMcpParameterDocumentationAndDetailsDiscovery..." << std::endl;
   AetherHelmMcpServer server;
 
-  // 1. Category filtering
+  // 1. Category filtering across all advertised enum categories
+  std::string oscParams = server.listAvailableParameters("oscillators", true);
+  assert(oscParams.find("\"id\":\"osc_1_waveform\"") != std::string::npos || oscParams.find("\"id\": \"osc_1_waveform\"") != std::string::npos);
+  assert(oscParams.find("\"id\":\"sub_volume\"") != std::string::npos || oscParams.find("\"id\": \"sub_volume\"") != std::string::npos);
+
+  std::string envParams = server.listAvailableParameters("envelopes", true);
+  assert(envParams.find("\"id\":\"amp_attack\"") != std::string::npos || envParams.find("\"id\": \"amp_attack\"") != std::string::npos);
+  assert(envParams.find("\"id\":\"mod_decay\"") != std::string::npos || envParams.find("\"id\": \"mod_decay\"") != std::string::npos);
+
+  std::string modParams = server.listAvailableParameters("modulators", true);
+  assert(modParams.find("\"id\":\"mono_lfo_1_frequency\"") != std::string::npos || modParams.find("\"id\": \"mono_lfo_1_frequency\"") != std::string::npos);
+  assert(modParams.find("\"id\":\"arp_gate\"") != std::string::npos || modParams.find("\"id\": \"arp_gate\"") != std::string::npos);
+
+  std::string fxParams = server.listAvailableParameters("effects", true);
+  assert(fxParams.find("\"id\":\"reverb_feedback\"") != std::string::npos || fxParams.find("\"id\": \"reverb_feedback\"") != std::string::npos);
+  assert(fxParams.find("\"id\":\"delay_tempo\"") != std::string::npos || fxParams.find("\"id\": \"delay_tempo\"") != std::string::npos);
+
   std::string filterParams = server.listAvailableParameters("filter", true);
-  assert(filterParams.find("\"category\":\"filter\"") != std::string::npos || filterParams.find("\"category\": \"filter\"") != std::string::npos);
+  assert(filterParams.find("\"category\":\"Filter\"") != std::string::npos || filterParams.find("\"category\": \"Filter\"") != std::string::npos);
   assert(filterParams.find("\"id\":\"cutoff\"") != std::string::npos || filterParams.find("\"id\": \"cutoff\"") != std::string::npos);
   assert(filterParams.find("Filter cutoff frequency") != std::string::npos);
   // Oscillator shouldn't be in filter category list
@@ -398,13 +461,19 @@ void testMcpParameterDocumentationAndDetailsDiscovery() {
   assert(concise.find("\"description\"") == std::string::npos);
 
   // 3. Parameter details discovery with alias resolution
-  std::string detailSingle = server.getParameterDetails(R"({"parameter": "filter_cutoff"})");
+  std::string detailSingle = server.getParameterDetails(R"({"parameter": "cutoff_frequency"})");
   assert(detailSingle.find("\"success\":true") != std::string::npos || detailSingle.find("\"success\": true") != std::string::npos);
   assert(detailSingle.find("\"id\":\"cutoff\"") != std::string::npos || detailSingle.find("\"id\": \"cutoff\"") != std::string::npos);
   assert(detailSingle.find("\"min\":28") != std::string::npos || detailSingle.find("\"min\": 28") != std::string::npos);
   assert(detailSingle.find("\"max\":127") != std::string::npos || detailSingle.find("\"max\": 127") != std::string::npos);
   assert(detailSingle.find("\"units\":\"semitones\"") != std::string::npos || detailSingle.find("\"units\": \"semitones\"") != std::string::npos);
   assert(detailSingle.find("\"found\":true") != std::string::npos || detailSingle.find("\"found\": true") != std::string::npos);
+
+  std::string detailRes = server.getParameterDetails(R"({"parameter": "resonance_amount"})");
+  assert(detailRes.find("\"id\":\"resonance\"") != std::string::npos || detailRes.find("\"id\": \"resonance\"") != std::string::npos);
+
+  std::string detailOsc = server.getParameterDetails(R"({"parameter": "osc1_vol"})");
+  assert(detailOsc.find("\"id\":\"osc_1_volume\"") != std::string::npos || detailOsc.find("\"id\": \"osc_1_volume\"") != std::string::npos);
 
   // 4. Parameter not found handling
   std::string detailMissing = server.getParameterDetails(R"({"parameter": "non_existent_control"})");

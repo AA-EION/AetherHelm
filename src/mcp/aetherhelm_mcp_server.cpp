@@ -28,7 +28,8 @@ std::string AetherHelmMcpServer::setPatchParameters(const std::string& patchOrPa
     targetVar = obj->getProperty("patch");
   else if (obj->hasProperty("parameters") && obj->getProperty("parameters").isObject())
     targetVar = obj->getProperty("parameters");
-  else if (obj->hasProperty("settings") && obj->getProperty("settings").isObject())
+  else if (obj->hasProperty("settings") && obj->getProperty("settings").isObject()
+           && !obj->hasProperty("modulations") && !obj->hasProperty("patch_name"))
     targetVar = obj->getProperty("settings");
 
   std::string targetJson = JSON::toString(targetVar, false).toStdString();
@@ -52,20 +53,46 @@ std::string AetherHelmMcpServer::setPatchParameters(const std::string& patchOrPa
   return JSON::toString(resp, false).toStdString();
 }
 
+static bool matchesCategoryFilter(const std::string& paramCat, const std::string& filterCat) {
+  if (filterCat == "all" || filterCat.empty())
+    return true;
+
+  std::string f = filterCat;
+  std::transform(f.begin(), f.end(), f.begin(), ::tolower);
+  std::string c = paramCat;
+  std::transform(c.begin(), c.end(), c.begin(), ::tolower);
+
+  if (f == "oscillators" || f == "oscillator" || f == "osc") {
+    return c.find("oscillator") != std::string::npos || c == "noise";
+  }
+  if (f == "filter" || f == "filters") {
+    return c == "filter";
+  }
+  if (f == "envelopes" || f == "envelope" || f == "env") {
+    return c.find("envelope") != std::string::npos;
+  }
+  if (f == "modulators" || f == "modulator" || f == "lfo") {
+    return c.find("lfo") != std::string::npos || c.find("step") != std::string::npos || c.find("arp") != std::string::npos;
+  }
+  if (f == "effects" || f == "effect" || f == "fx") {
+    return c == "distortion" || c == "delay" || c == "reverb" || c == "stutter";
+  }
+  if (f == "global") {
+    return c == "global";
+  }
+
+  return c.find(f) != std::string::npos || f.find(c) != std::string::npos;
+}
+
 std::string AetherHelmMcpServer::listAvailableParameters(const std::string& category, bool includeDetails) {
   DynamicObject* root = new DynamicObject();
   std::map<std::string, mopo::ValueDetails> allDetails = mopo::Parameters::lookup_.getAllDetails();
 
-  std::string catFilter = category;
-  std::transform(catFilter.begin(), catFilter.end(), catFilter.begin(), ::tolower);
-
   Array<var> paramList;
   for (const auto& pair : allDetails) {
     std::string paramCat = AetherPatchSerializer::getParameterCategory(pair.first);
-    std::string paramCatLower = paramCat;
-    std::transform(paramCatLower.begin(), paramCatLower.end(), paramCatLower.begin(), ::tolower);
 
-    if (catFilter != "all" && !catFilter.empty() && paramCatLower.find(catFilter) == std::string::npos)
+    if (!matchesCategoryFilter(paramCat, category))
       continue;
 
     DynamicObject* item = new DynamicObject();
@@ -687,9 +714,16 @@ void AetherHelmMcpServer::handleJsonRpcMessage(const std::string& msg) {
         DynamicObject* a = argsVar.getDynamicObject();
         if (a->hasProperty("note_number")) note = static_cast<int>(a->getProperty("note_number"));
         else if (a->hasProperty("note")) note = static_cast<int>(a->getProperty("note"));
+        else if (a->hasProperty("midi_note")) note = static_cast<int>(a->getProperty("midi_note"));
+        else if (a->hasProperty("pitch")) note = static_cast<int>(a->getProperty("pitch"));
+
         if (a->hasProperty("velocity")) vel = static_cast<float>(a->getProperty("velocity"));
+        else if (a->hasProperty("vel")) vel = static_cast<float>(a->getProperty("vel"));
+
         if (a->hasProperty("duration_seconds")) dur = static_cast<float>(a->getProperty("duration_seconds"));
         else if (a->hasProperty("duration")) dur = static_cast<float>(a->getProperty("duration"));
+        else if (a->hasProperty("seconds")) dur = static_cast<float>(a->getProperty("seconds"));
+        else if (a->hasProperty("sec")) dur = static_cast<float>(a->getProperty("sec"));
       }
       resultText = triggerPreviewNote(note, vel, dur);
     } else {
@@ -704,6 +738,11 @@ void AetherHelmMcpServer::handleJsonRpcMessage(const std::string& msg) {
     contentItem->setProperty("text", String(resultText));
     contentArray.add(contentItem);
     callResp->setProperty("content", contentArray);
+
+    if (resultText.find("\"success\": false") != std::string::npos ||
+        resultText.find("\"success\":false") != std::string::npos) {
+      callResp->setProperty("isError", true);
+    }
 
     sendResponse(idStr, JSON::toString(callResp, false).toStdString());
   } else {
