@@ -25,6 +25,8 @@
 #include "shaders.h"
 #include "synth_gui_interface.h"
 
+using namespace juce::gl;
+
 #define FLOATS_PER_METER 24
 #define INDICES_PER_METER 6
 #define POINTS_PER_METER 4

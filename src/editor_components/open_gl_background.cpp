@@ -19,6 +19,8 @@
 #include "common.h"
 #include "shaders.h"
 
+using namespace juce::gl;
+
 OpenGLBackground::OpenGLBackground() {
   new_background_ = false;
 }

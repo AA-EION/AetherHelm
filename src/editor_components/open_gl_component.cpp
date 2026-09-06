@@ -17,6 +17,8 @@
 #include "open_gl_component.h"
 #include "full_interface.h"
 
+using namespace juce::gl;
+
 void OpenGLComponent::setViewPort(OpenGLContext& open_gl_context) {
   float scale = open_gl_context.getRenderingScale();
   FullInterface* parent = findParentComponentOfClass<FullInterface>();

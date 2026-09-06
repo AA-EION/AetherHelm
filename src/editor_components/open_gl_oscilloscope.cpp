@@ -20,6 +20,8 @@
 #include "shaders.h"
 #include "utils.h"
 
+using namespace juce::gl;
+
 #define RESOLUTION 256
 #define GRID_CELL_WIDTH 8
 

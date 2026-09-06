@@ -20,6 +20,8 @@
 #include "synth_gui_interface.h"
 #include "utils.h"
 
+using namespace juce::gl;
+
 namespace {
   const float ATTACK_RANGE_PERCENT = 0.33f;
   const float DECAY_RANGE_PERCENT = 0.33f;
@@ -71,7 +73,7 @@ void OpenGLEnvelope::paintBackground() {
 
   float ratio = getHeight() / 100.0f;
 
-  const Desktop::Displays::Display& display = Desktop::getInstance().getDisplays().getMainDisplay();
+  const Displays::Display& display = Desktop::getInstance().getDisplays().getMainDisplay();
   float scale = display.scale;
   background_image_ = Image(Image::ARGB, scale * getWidth(), scale * getHeight(), true);
   Graphics g(background_image_);

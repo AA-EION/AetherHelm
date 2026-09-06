@@ -22,7 +22,7 @@
 #include "helm_common.h"
 #include "formant_manager.h"
 
-class FormantResponse : public Component, SliderListener {
+class FormantResponse : public Component, Slider::Listener {
   public:
     FormantResponse(int resolution);
     ~FormantResponse();

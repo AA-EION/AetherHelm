@@ -174,6 +174,7 @@ set(EDITOR_COMPONENTS_SOURCES
     src/editor_components/bpm_slider.cpp
     src/editor_components/filter_response.cpp
     src/editor_components/filter_selector.cpp
+    src/editor_components/formant_response.cpp
     src/editor_components/global_tool_tip.cpp
     src/editor_components/graphical_step_sequencer.cpp
     src/editor_components/midi_keyboard.cpp
@@ -198,6 +199,7 @@ set(EDITOR_COMPONENTS_SOURCES
     src/editor_components/text_slider.cpp
     src/editor_components/wave_selector.cpp
     src/editor_components/wave_viewer.cpp
+    src/editor_components/xy_pad.cpp
 )
 
 # Editor sections sources
