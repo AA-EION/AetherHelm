@@ -245,6 +245,12 @@ if(APPLE)
     list(APPEND AETHERHELM_FORMATS AU)
 endif()
 
+# JUCE 7.0.12's VST3 moduleinfo tool (juce_vst3_helper) does not run correctly
+# on Windows ARM64, so build Standalone-only there.
+if(WIN32 AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|arm64|aarch64)$")
+    list(REMOVE_ITEM AETHERHELM_FORMATS VST3)
+endif()
+
 # ==============================================================================
 # Plugin Target: AetherHelm
 # ==============================================================================
