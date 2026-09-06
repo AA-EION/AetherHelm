@@ -20,8 +20,8 @@
 #include "midi_lookup.h"
 #include "utils.h"
 
-#define MIN_GAIN_DB 0.0f
-#define MAX_GAIN_DB 24.0f
+#define MIN_GAIN_DB 0.0
+#define MAX_GAIN_DB 24.0
 #define MIN_RESONANCE 0.5
 #define MAX_RESONANCE 16.0
 #define GRID_CELL_WIDTH 8
