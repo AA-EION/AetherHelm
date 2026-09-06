@@ -91,11 +91,7 @@ jobs:
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: |
-          cmake -B build \
-            -G "Visual Studio 17 2022" \
-            -A ${{ matrix.cmake_arch }} \
-            -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -G "Visual Studio 17 2022" -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
 
       # Compilation
       - name: Build All Targets (Plugin, MCP Server, Tests)
