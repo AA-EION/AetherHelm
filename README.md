@@ -1,68 +1,118 @@
-## Helm
-Helm is a free, cross-platform, polyphonic synthesizer that runs on GNU/Linux, Mac, and Windows as a standalone program and as a LV2/VST/AU/AAX plugin. Release is in beta so there are outstanding bugs. Please send any bugs found to matthewtytel@gmail.com
+# AetherHelm
 
-### Installing:
-Go to [tytel.org/helm](http://tytel.org/helm) for builds.
+[![CI/CD Multi-Platform Build](https://github.com/AA-EION/AetherHelm/actions/workflows/build-test-release.yml/badge.svg)](https://github.com/AA-EION/AetherHelm/actions/workflows/build-test-release.yml)
+[![C++20](https://img.shields.io/badge/standard-C%2B%2B20-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B20)
+[![JUCE](https://img.shields.io/badge/framework-JUCE%207%2F8-orange.svg)](https://juce.com/)
+[![Formats](https://img.shields.io/badge/formats-VST3%20%7C%20AU%20%7C%20CLAP%20%7C%20Standalone-green.svg)]()
+[![MCP](https://img.shields.io/badge/protocol-Model%20Context%20Protocol%20(MCP)-purple.svg)](https://modelcontextprotocol.io/)
 
-### Building:
-If you want to build AAX plugins You'll need its SDK located in ~/srcs  
-For AU on the Mac you'll want to put the CoreAudio SDK in /Applications/Xcode.app/Contents/Developer/Extras/CoreAudio  
-Nothing extra is needed for building VST/LV2 plugins
+**AetherHelm** is a next-generation, AI-driven modular polyphonic synthesizer. Built upon the foundation of Matt Tytel's acclaimed open-source synthesizer Helm, AetherHelm transforms classic subtractive and wavetable synthesis with modern C++20 architecture, idiomatic JUCE CMake support, bidirectional JSON preset schemas, direct OpenRouter AI patch generation, and Model Context Protocol (MCP) server integration.
 
-#### Linux
-To build and install the standalone, lv2 and vst plugin:
+---
+
+## Key Highlights
+
+- **Modern C++20 Engine**: Clean, performant, and thread-safe audio engine overhauled for C++20 standard compliance.
+- **Idiomatic CMake & JUCE Integration**: Replaced legacy project generators with standard `juce_add_plugin` / `juce_generate_juce_header` CMake targets supporting VST3, AU, CLAP, and Standalone.
+- **Strict Real-Time Safety**: Zero allocations or locking on the audio callback thread; lock-free communication between GUI, network, and audio engine.
+- **Bidirectional JSON Patch Architecture**: Standardized, human-readable, and AI-friendly JSON schema supporting granular serialization, parameter clamping, and seamless import/export.
+- **In-App AI Agent (OpenRouter)**: Integrated background client connecting to state-of-the-art LLMs (Claude 3.5 Sonnet, GPT-4o, DeepSeek Coder) for natural language sound design and immediate patch injection.
+- **Model Context Protocol (MCP) Server**: Headless MCP server (`aetherhelm-mcp`) enabling direct synthesis control, patch queries, parameter auditioning, and MIDI previewing from Claude Desktop, Cursor, Windsurf, and Cline.
+- **Multi-Platform CI/CD**: Automated GitHub Actions matrix generating native builds for Windows (MSVC), macOS (Universal Binary x86_64 + arm64), and Linux.
+
+---
+
+## Synthesis Engine Features
+
+- **Polyphony**: 32-voice true polyphony with smooth voice allocation and unison detune.
+- **Oscillators**: Dual primary oscillators with 12 morphing waveforms, cross-modulation, up to 15 unison voices, sub-oscillator with shuffle waveshaping, and feedback loops.
+- **Multi-Mode Filter**: 12/24 dB state-variable low-pass, band-pass, high-pass, shelf, formant filter, and analog-style drive.
+- **Modulation System**: Dual monophonic LFOs, polyphonic LFO, 32-step sequencer, dual envelopes (amp, filter, mod), and dynamic modulation matrix with live visual feedback.
+- **Effects Chain**: Onboard distortion, tempo-synced delay, lush algorithmic reverb, and dynamic stutter effects.
+
+---
+
+## Building AetherHelm
+
+### Prerequisites
+- **CMake**: Version 3.22 or newer
+- **C++20 Compiler**:
+  - Windows: MSVC (Visual Studio 2022)
+  - macOS: Xcode 14+ or Clang with Universal Binary support
+  - Linux: GCC 11+ or Clang 13+ with audio development libraries (`libasound2-dev`, `libjack-jackd2-dev`, `libfreetype6-dev`, `libx11-dev`, `libgl1-mesa-dev`)
+
+### CMake Build Instructions
+
 ```bash
-make
-sudo make install
+# Clone the repository
+git clone https://github.com/AA-EION/AetherHelm.git
+cd AetherHelm
+
+# Configure project
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+# Build plugin formats and MCP server
+cmake --build build --config Release --parallel
 ```
 
-Other make commands:
-```bash
-# Build just the Linux standalone executable:
-make standalone
+Build outputs will be generated in `build/AetherHelm_artefacts/Release/` (VST3, AU, Standalone) and `build/aetherhelm-mcp`.
 
-# Build just the Linux LV2 plugin:
-make lv2
+---
 
-# Build just the Linux VST plugin
-make vst
+## AI Sound Design with OpenRouter
 
-# Install just the Linux standalone executable:
-sudo make install_standalone
+AetherHelm features a dedicated AI generation interface allowing you to describe sound designs in natural language:
 
-# Install just the Linux LV2 plugin:
-sudo make install_lv2
+> *"Design an aggressive cyberpunk bass with detuned saw waves, a biting comb filter, and an LFO modulating the cutoff tempo-synced at 1/8d"*
 
-# Install just the Linux VST plugin
-sudo make install_vst
+### Configuration
+1. Open AetherHelm (Standalone or DAW plugin).
+2. Open the **AI Synthesis** bar.
+3. Enter your **OpenRouter API Key** (or export `OPENROUTER_API_KEY` in your environment).
+4. Select your preferred model (default: `anthropic/claude-3.5-sonnet`).
+5. Type your sound description and click **Generate**. The synth will asynchronously generate the patch, validate bounds, and inject the sound in real time without audio glitches.
+
+---
+
+## Model Context Protocol (MCP) Server
+
+AetherHelm includes a standalone MCP server (`aetherhelm-mcp`) enabling LLMs in desktop environments to act as an automated sound designer.
+
+### Supported MCP Tools
+- `get_current_patch`: Inspects current synthesizer state, oscillator parameters, filter cutoffs, and active modulation matrix.
+- `set_patch_parameters`: Modifies specific parameters or injects full patches dynamically.
+- `list_available_parameters`: Lists all addressable synth parameters with ranges, defaults, and descriptions.
+- `trigger_preview_note`: Renders and previews MIDI audition notes programmatically.
+- `generate_patch_from_prompt`: Generates a complete preset from a natural language prompt via OpenRouter.
+
+### Auto-Configuration for Desktop AI
+
+Run the automated installer script to register `aetherhelm-mcp` with your desktop AI clients:
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\install-mcp.ps1
 ```
 
-The standalone executable is built to standalone/builds/linux/build and installed to /usr/bin
-The LV2 plugin is built to builds/linux/LV2 and installed to /usr/lib/lv2
-The VST plugin is built to builds/linux/VST and installed to /usr/lib/lxvst
+**macOS / Linux (Bash):**
+```bash
+./scripts/install-mcp.sh
+```
 
-#### OSX
-Open /standalone/builds/osx/Helm.xcodeproj for standalone version  
-Open /builds/osx/Helm.xcodeproj for plugin versions
+Or configure manually in `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "aetherhelm": {
+      "command": "/path/to/aetherhelm-mcp",
+      "args": []
+    }
+  }
+}
+```
 
-#### Windows
-Open /standalone/builds/vs15/Helm.sln for standalone version  
-Open /builds/vs15/Helm.sln for plugin versions
+---
 
-### Features:
- - 32 voice polyphony
- - Interactive visual interface
- - Powerful modulation system with live visual feedback
- - Dual oscillators with cross modulation and up to 15 unison oscillators each
- - Sub oscillator with shuffle waveshaping
- - Oscillator feedback and saturation for waveshaping
- - 12 different waveforms
- - Blending between 12 or 24dB low/band/high pass filter
- - Low/Band/High Shelf filters
- - 2 monophonic and 1 polyphonic LFO
- - Step sequencer
- - Lots of modulation sources including polyphonic aftertouch
- - Simple arpeggiator
- - Effects: Formant filter, stutter, delay, distortion, reverb
+## License
 
-![alt tag](http://tytel.org/static/images/helm_screenshot.png)
+AetherHelm is licensed under the GNU General Public License v3.0 (GPLv3). Original synthesizer engine (Helm) Copyright (c) Matt Tytel. Modernization, AI engine, and MCP extensions Copyright (c) AA-EION.

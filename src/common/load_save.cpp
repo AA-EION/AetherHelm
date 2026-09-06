@@ -353,7 +353,7 @@ String LoadSave::getLicense(var state) {
 
 File LoadSave::getConfigFile() {
   PropertiesFile::Options config_options;
-  config_options.applicationName = "Helm";
+  config_options.applicationName = ProjectInfo::projectName;
   config_options.osxLibrarySubFolder = "Application Support";
   config_options.filenameSuffix = "config";
 
@@ -719,10 +719,10 @@ File LoadSave::getBankDirectory() {
   patch_dir = File(LINUX_BANK_DIRECTORY);
 #elif defined(__APPLE__)
   File data_dir = File::getSpecialLocation(File::userApplicationDataDirectory);
-  patch_dir = data_dir.getChildFile(String("Audio/Presets/") + "Helm");
+  patch_dir = data_dir.getChildFile(String("Audio/Presets/") + ProjectInfo::projectName);
 #elif defined(_WIN32)
   File documents_dir = File::getSpecialLocation(File::userDocumentsDirectory);
-  File parent_dir = documents_dir.getChildFile("Helm");
+  File parent_dir = documents_dir.getChildFile(ProjectInfo::projectName);
   if (!parent_dir.exists())
     parent_dir.createDirectory();
   patch_dir = parent_dir.getChildFile("Patches");

@@ -110,7 +110,7 @@ void AboutSection::paint(Graphics& g) {
 
   g.setFont(Fonts::instance()->proportional_regular().withPointHeight(32.0));
   g.setColour(Colour(0xff2196f3));
-  g.drawText(TRANS("HELM"),
+  g.drawText(TRANS("AETHERHELM"),
              0.0f, 0.0f,
              info_rect.getWidth() - 2 * PADDING_X, 32.0f, Justification::centredTop);
 
@@ -126,7 +126,7 @@ void AboutSection::paint(Graphics& g) {
              info_rect.getWidth() - 2 * PADDING_X, 20.0f, Justification::right);
 
   g.setColour(Colour(0xffaaaaaa));
-  g.drawText(TRANS("Helm is free software and"),
+  g.drawText(TRANS("AetherHelm is free software and"),
              0.0f, 62.0,
              info_rect.getWidth() - 2 * PADDING_X, 20.0f, Justification::topRight);
 
