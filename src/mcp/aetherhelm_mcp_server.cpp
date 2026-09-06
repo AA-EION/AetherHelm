@@ -389,8 +389,8 @@ std::string AetherHelmMcpServer::morphPatch(const std::string& targetPatchOrPara
         self(self, val, fullKey);
       } else if (val.isDouble() || val.isInt() || val.isInt64() || val.isBool()) {
         float fVal = val.isBool() ? ((bool)val ? 1.0f : 0.0f) : static_cast<float>(val);
-        std::string resolved = AetherPatchSerializer::resolveAlias(fullKey);
-        if (resolved.empty()) resolved = AetherPatchSerializer::resolveAlias(key);
+        std::string resolved = AetherPatchSerializer::resolveParameterName(fullKey);
+        if (resolved.empty()) resolved = AetherPatchSerializer::resolveParameterName(key);
         if (resolved.empty()) resolved = fullKey;
         targetControls[resolved] = fVal;
       }
@@ -518,7 +518,11 @@ std::string AetherHelmMcpServer::describePatch(bool /*verbose*/) {
   if (getVal("reverb_on", 0.0f) > 0.5f) activeFx.add("Reverb");
   if (getVal("stutter_on", 0.0f) > 0.5f) activeFx.add("Stutter");
 
-  int modCount = synth_.getEngine()->numModulations();
+  int modCount = 0;
+  for (mopo::ModulationConnection* conn : synth_.getModulationConnections()) {
+    if (conn && conn->amount.value() != 0.0f)
+      modCount++;
+  }
 
   std::ostringstream desc;
   desc << "### AetherHelm Patch: " << name << "\n"
@@ -568,7 +572,7 @@ std::string AetherHelmMcpServer::validatePatch(const std::string& candidatePatch
 
   auto validateKeyVal = [&](const std::string& key, const var& val) {
     checked++;
-    std::string resolved = AetherPatchSerializer::resolveAlias(key);
+    std::string resolved = AetherPatchSerializer::resolveParameterName(key);
     if (resolved.empty()) resolved = key;
 
     auto it = allDetails.find(resolved);
@@ -610,9 +614,9 @@ std::string AetherHelmMcpServer::validatePatch(const std::string& candidatePatch
       } else {
         std::string src = m->getProperty("source").toString().toStdString();
         std::string dst = m->getProperty("destination").toString().toStdString();
-        std::string resSrc = AetherPatchSerializer::resolveModulationSourceAlias(src);
-        std::string resDst = AetherPatchSerializer::resolveAlias(dst);
-        if (resSrc.empty()) errors.add("Invalid modulation source: '" + String(src) + "'");
+        std::string resSrc = AetherPatchSerializer::resolveModulationSourceName(src);
+        std::string resDst = AetherPatchSerializer::resolveParameterName(dst);
+        if (!AetherPatchSerializer::isValidModulationSource(src)) errors.add("Invalid modulation source: '" + String(src) + "'");
         if (allDetails.find(resDst) == allDetails.end()) warnings.add("Unknown modulation destination: '" + String(dst) + "'");
       }
     }
