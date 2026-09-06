@@ -21,6 +21,7 @@
 #include "JuceHeader.h"
 
 #include "about_section.h"
+#include "ai_prompt_section.h"
 #include "arp_section.h"
 #include "bpm_section.h"
 #include "contribute_section.h"
@@ -80,6 +81,7 @@ class FullInterface : public SynthSection, public OpenGLRenderer {
     ScopedPointer<UpdateCheckSection> update_check_section_;
     ScopedPointer<Component> standalone_settings_section_;
     ScopedPointer<ImageButton> logo_button_;
+    ScopedPointer<AiPromptSection> ai_prompt_section_;
     ScopedPointer<ArpSection> arp_section_;
     ScopedPointer<SynthesisInterface> synthesis_interface_;
     ScopedPointer<OpenGLOscilloscope> oscilloscope_;

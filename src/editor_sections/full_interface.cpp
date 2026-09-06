@@ -73,6 +73,8 @@ FullInterface::FullInterface(mopo::control_map controls, mopo::output_map modula
   addAndMakeVisible(logo_button_);
   logo_button_->addListener(this);
 
+  addAndMakeVisible(ai_prompt_section_ = new AiPromptSection("AI Sound Design"));
+
   addChildComponent(patch_browser_ = new PatchBrowser());
   patch_selector_->setBrowser(patch_browser_);
 
@@ -115,6 +117,7 @@ FullInterface::~FullInterface() {
   contribute_section_ = nullptr;
   update_check_section_ = nullptr;
   arp_section_ = nullptr;
+  ai_prompt_section_ = nullptr;
   oscilloscope_ = nullptr;
   synthesis_interface_ = nullptr;
   bpm_section_ = nullptr;
@@ -228,8 +231,13 @@ void FullInterface::resized() {
   arp_section_->setBounds(bpm_section_->getRight() + padding, padding,
                           arp_width, top_height);
 
-  synthesis_interface_->setBounds(left, top_height + padding,
-                                  width, height - top_height - padding);
+  int ai_height = 36 * ratio;
+  ai_prompt_section_->setSizeRatio(ratio);
+  ai_prompt_section_->setBounds(left + padding, top_height + padding,
+                                width - 2 * padding, ai_height);
+
+  synthesis_interface_->setBounds(left, top_height + padding + ai_height,
+                                  width, height - top_height - padding - ai_height);
 
   about_section_->setBounds(getBounds());
   if (contribute_section_)
