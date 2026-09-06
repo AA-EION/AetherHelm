@@ -2,6 +2,7 @@
 #include "synth_base.h"
 #include "synth_gui_interface.h"
 #include <algorithm>
+#include <cmath>
 
 static std::string resolveParameterName(const std::string& key, const std::string& prefix) {
   if (mopo::Parameters::isParameter(key))
@@ -30,11 +31,15 @@ static std::string resolveParameterName(const std::string& key, const std::strin
   return combined;
 }
 
-void AetherPatchSerializer::applyControl(SynthBase* synth, const std::string& name, mopo::mopo_float value) {
+void AetherPatchSerializer::applyControl(SynthBase* synth, const std::string& name,
+                                        mopo::mopo_float value, int* updatedCount) {
   if (!mopo::Parameters::isParameter(name))
     return;
 
   mopo::ValueDetails details = mopo::Parameters::getDetails(name);
+  if (!std::isfinite(value))
+    value = static_cast<mopo::mopo_float>(details.default_value);
+
   mopo::mopo_float minVal = static_cast<mopo::mopo_float>(details.min);
   mopo::mopo_float maxVal = static_cast<mopo::mopo_float>(details.max);
   mopo::mopo_float clamped = std::clamp<mopo::mopo_float>(value, minVal, maxVal);
@@ -45,20 +50,28 @@ void AetherPatchSerializer::applyControl(SynthBase* synth, const std::string& na
     it->second->set(clamped);
 
   synth->valueChangedInternal(name, clamped);
+  if (updatedCount)
+    (*updatedCount)++;
 }
 
 void AetherPatchSerializer::applyModulation(SynthBase* synth, const std::string& source,
-                                           const std::string& dest, mopo::mopo_float amount) {
+                                           const std::string& dest, mopo::mopo_float amount,
+                                           int* updatedCount) {
   if (source.empty() || dest.empty())
     return;
   if (!mopo::Parameters::isParameter(dest))
     return;
+  if (!std::isfinite(amount))
+    amount = 0.0f;
 
   mopo::mopo_float clamped = std::clamp<mopo::mopo_float>(amount, -1.0f, 1.0f);
   synth->changeModulationAmount(source, dest, clamped);
+  if (updatedCount)
+    (*updatedCount)++;
 }
 
-void AetherPatchSerializer::parseHierarchicalSection(SynthBase* synth, const var& sectionVar, const std::string& prefix) {
+void AetherPatchSerializer::parseHierarchicalSection(SynthBase* synth, const var& sectionVar,
+                                                    const std::string& prefix, int* updatedCount) {
   if (!sectionVar.isObject())
     return;
 
@@ -72,11 +85,11 @@ void AetherPatchSerializer::parseHierarchicalSection(SynthBase* synth, const var
 
     if (val.isObject()) {
       std::string newPrefix = prefix.empty() ? key : prefix + "_" + key;
-      parseHierarchicalSection(synth, val, newPrefix);
+      parseHierarchicalSection(synth, val, newPrefix, updatedCount);
     } else if (val.isDouble() || val.isInt() || val.isInt64() || val.isBool()) {
       mopo::mopo_float numVal = static_cast<mopo::mopo_float>(val);
       std::string paramName = resolveParameterName(key, prefix);
-      applyControl(synth, paramName, numVal);
+      applyControl(synth, paramName, numVal, updatedCount);
     }
   }
 }
@@ -156,7 +169,8 @@ var AetherPatchSerializer::stateToVar(SynthBase* synth, bool hierarchical) {
   return root;
 }
 
-bool AetherPatchSerializer::loadPatchFromJson(SynthBase* synth, const std::string& jsonString, std::string* error) {
+bool AetherPatchSerializer::loadPatchFromJson(SynthBase* synth, const std::string& jsonString,
+                                             std::string* error, int* updatedCount) {
   var parsedState;
   Result res = JSON::parse(String(jsonString), parsedState);
   if (res.failed()) {
@@ -164,10 +178,11 @@ bool AetherPatchSerializer::loadPatchFromJson(SynthBase* synth, const std::strin
     return false;
   }
 
-  return varToState(synth, parsedState, error);
+  return varToState(synth, parsedState, error, updatedCount);
 }
 
-bool AetherPatchSerializer::varToState(SynthBase* synth, const var& parsedState, std::string* error) {
+bool AetherPatchSerializer::varToState(SynthBase* synth, const var& parsedState,
+                                      std::string* error, int* updatedCount) {
   if (!parsedState.isObject()) {
     if (error) *error = "JSON root must be an object";
     return false;
@@ -191,8 +206,8 @@ bool AetherPatchSerializer::varToState(SynthBase* synth, const var& parsedState,
       std::string key = settingProps.getName(i).toString().toStdString();
       if (key == "modulations") continue;
       var val = settingProps.getValueAt(i);
-      if (val.isDouble() || val.isInt() || val.isInt64())
-        applyControl(synth, key, static_cast<mopo::mopo_float>(val));
+      if (val.isDouble() || val.isInt() || val.isInt64() || val.isBool())
+        applyControl(synth, key, static_cast<mopo::mopo_float>(val), updatedCount);
     }
   }
 
@@ -200,7 +215,7 @@ bool AetherPatchSerializer::varToState(SynthBase* synth, const var& parsedState,
   const char* sections[] = { "oscillators", "filter", "envelopes", "modulators", "effects", "global" };
   for (const char* sectionName : sections) {
     if (props.contains(sectionName))
-      parseHierarchicalSection(synth, props[sectionName], "");
+      parseHierarchicalSection(synth, props[sectionName], "", updatedCount);
   }
 
   // Check for direct properties at root level
@@ -208,8 +223,8 @@ bool AetherPatchSerializer::varToState(SynthBase* synth, const var& parsedState,
     std::string key = props.getName(i).toString().toStdString();
     if (mopo::Parameters::isParameter(key)) {
       var val = props.getValueAt(i);
-      if (val.isDouble() || val.isInt() || val.isInt64())
-        applyControl(synth, key, static_cast<mopo::mopo_float>(val));
+      if (val.isDouble() || val.isInt() || val.isInt64() || val.isBool())
+        applyControl(synth, key, static_cast<mopo::mopo_float>(val), updatedCount);
     }
   }
 
@@ -231,7 +246,7 @@ bool AetherPatchSerializer::varToState(SynthBase* synth, const var& parsedState,
       std::string source = mod->getProperty("source").toString().toStdString();
       std::string dest = mod->getProperty("destination").toString().toStdString();
       mopo::mopo_float amount = static_cast<mopo::mopo_float>(mod->getProperty("amount"));
-      applyModulation(synth, source, dest, amount);
+      applyModulation(synth, source, dest, amount, updatedCount);
     }
   }
 
@@ -253,4 +268,69 @@ std::string AetherPatchSerializer::getParameterDocumentationJson() {
   }
 
   return JSON::toString(doc, false).toStdString();
+}
+
+std::string AetherPatchSerializer::extractJsonFromText(const std::string& raw) {
+  std::string s = raw;
+  size_t fenceStart = s.find("```");
+  if (fenceStart != std::string::npos) {
+    size_t lineEnd = s.find('\n', fenceStart);
+    if (lineEnd != std::string::npos) {
+      size_t contentStart = lineEnd + 1;
+      size_t fenceEnd = s.find("```", contentStart);
+      if (fenceEnd != std::string::npos) {
+        std::string fenced = s.substr(contentStart, fenceEnd - contentStart);
+        size_t firstBrace = fenced.find('{');
+        size_t lastBrace = fenced.rfind('}');
+        if (firstBrace != std::string::npos && lastBrace != std::string::npos && lastBrace > firstBrace) {
+          return fenced.substr(firstBrace, lastBrace - firstBrace + 1);
+        }
+      }
+    }
+  }
+
+  size_t firstBrace = s.find('{');
+  if (firstBrace == std::string::npos)
+    return raw;
+
+  int depth = 0;
+  bool inQuotes = false;
+  bool escaped = false;
+  size_t endBrace = std::string::npos;
+
+  for (size_t i = firstBrace; i < s.length(); ++i) {
+    char c = s[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c == '\\') {
+      escaped = true;
+      continue;
+    }
+    if (c == '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (!inQuotes) {
+      if (c == '{') {
+        depth++;
+      } else if (c == '}') {
+        depth--;
+        if (depth == 0) {
+          endBrace = i;
+          break;
+        }
+      }
+    }
+  }
+
+  if (endBrace != std::string::npos)
+    return s.substr(firstBrace, endBrace - firstBrace + 1);
+
+  size_t lastBrace = s.rfind('}');
+  if (lastBrace != std::string::npos && lastBrace > firstBrace)
+    return s.substr(firstBrace, lastBrace - firstBrace + 1);
+
+  return raw;
 }

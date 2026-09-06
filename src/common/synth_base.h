@@ -58,7 +58,7 @@ class SynthBase : public MidiManager::Listener {
     bool saveToActiveFile();
     File getActiveFile() { return active_file_; }
 
-    bool loadPatchFromJson(const std::string& jsonString, std::string* error = nullptr);
+    bool loadPatchFromJson(const std::string& jsonString, std::string* error = nullptr, int* updatedCount = nullptr);
     std::string exportPatchToJson(bool hierarchical = false);
 
     virtual void beginChangeGesture(const std::string& name) { }

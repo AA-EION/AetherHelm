@@ -79,8 +79,8 @@ void AiPromptSection::resized() {
   generate_button_->setBounds(x + inputW + gap + modelW + gap, y, btnW, compH);
   config_key_button_->setBounds(x + inputW + gap + modelW + gap + btnW + gap, y, keyW, compH);
 
-  if (h > 30)
-    status_label_->setBounds(x, y + compH + 2, w, 16);
+  if (h >= 24)
+    status_label_->setBounds(x, y + compH + 2, w, std::max(14, h - compH - 2));
   else
     status_label_->setBounds(0, 0, 0, 0);
 }

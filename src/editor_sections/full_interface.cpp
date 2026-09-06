@@ -142,6 +142,7 @@ void FullInterface::paintBackground(Graphics& g) {
   shadow.drawForRectangle(g, arp_section_->getBounds());
   shadow.drawForRectangle(g, oscilloscope_->getBounds());
   shadow.drawForRectangle(g, patch_selector_->getBounds());
+  shadow.drawForRectangle(g, ai_prompt_section_->getBounds());
 
   int logo_padding = 2 * size_ratio_;
   int x = logo_button_->getX() - logo_padding;
@@ -231,7 +232,7 @@ void FullInterface::resized() {
   arp_section_->setBounds(bpm_section_->getRight() + padding, padding,
                           arp_width, top_height);
 
-  int ai_height = 36 * ratio;
+  int ai_height = 52 * ratio;
   ai_prompt_section_->setSizeRatio(ratio);
   ai_prompt_section_->setBounds(left + padding, top_height + padding,
                                 width - 2 * padding, ai_height);

@@ -182,18 +182,21 @@ bool SynthBase::loadFromFile(File patch) {
   return false;
 }
 
-bool SynthBase::loadPatchFromJson(const std::string& jsonString, std::string* error) {
+bool SynthBase::loadPatchFromJson(const std::string& jsonString, std::string* error, int* updatedCount) {
   ScopedLock lock(getCriticalSection());
-  bool result = AetherPatchSerializer::loadPatchFromJson(this, jsonString, error);
+  bool result = AetherPatchSerializer::loadPatchFromJson(this, jsonString, error, updatedCount);
   SynthGuiInterface* gui_interface = getGuiInterface();
   if (result && gui_interface) {
     if (MessageManager::getInstance()->isThisTheMessageThread()) {
       gui_interface->updateFullGui();
       gui_interface->notifyFresh();
     } else {
-      MessageManager::callAsync([gui_interface]() {
-        gui_interface->updateFullGui();
-        gui_interface->notifyFresh();
+      MessageManager::callAsync([this]() {
+        SynthGuiInterface* gui = getGuiInterface();
+        if (gui) {
+          gui->updateFullGui();
+          gui->notifyFresh();
+        }
       });
     }
   }

@@ -1,67 +1,17 @@
 #include "aetherhelm_mcp_server.h"
+#include "aether_patch_serializer.h"
 #include "openrouter_client.h"
 #include <iostream>
 #include <sstream>
 #include <cmath>
 #include <algorithm>
 
-AetherHelmMcpServer::AetherHelmMcpServer() : patch_name_("Init Patch"), author_("AA-EION") {
-  initHeadlessSynth();
-}
+AetherHelmMcpServer::AetherHelmMcpServer() = default;
 
-AetherHelmMcpServer::~AetherHelmMcpServer() {}
-
-void AetherHelmMcpServer::initHeadlessSynth() {
-  engine_.init();
-  engine_.setSampleRate(44100);
-  engine_.setBufferSize(256);
-
-  controls_ = engine_.getControls();
-  for (auto& pair : controls_) {
-    if (pair.second && mopo::Parameters::isParameter(pair.first)) {
-      mopo::ValueDetails details = mopo::Parameters::getDetails(pair.first);
-      pair.second->set(details.default_value);
-    }
-  }
-}
-
-void AetherHelmMcpServer::applyHeadlessControl(const std::string& name, float value) {
-  if (controls_.find(name) != controls_.end() && controls_[name]) {
-    float clamped = value;
-    if (mopo::Parameters::isParameter(name)) {
-      mopo::ValueDetails details = mopo::Parameters::getDetails(name);
-      mopo::mopo_float minVal = static_cast<mopo::mopo_float>(details.min);
-      mopo::mopo_float maxVal = static_cast<mopo::mopo_float>(details.max);
-      clamped = static_cast<float>(std::clamp<mopo::mopo_float>(value, minVal, maxVal));
-    }
-    controls_[name]->set(clamped);
-  }
-}
+AetherHelmMcpServer::~AetherHelmMcpServer() = default;
 
 std::string AetherHelmMcpServer::getCurrentPatch() {
-  DynamicObject* root = new DynamicObject();
-  root->setProperty("patch_name", String(patch_name_));
-  root->setProperty("author", String(author_));
-
-  DynamicObject* settings = new DynamicObject();
-  for (const auto& pair : controls_) {
-    if (pair.second)
-      settings->setProperty(String(pair.first), pair.second->value());
-  }
-  root->setProperty("settings", settings);
-
-  Array<var> modArray;
-  for (mopo::ModulationConnection* connection : mod_connections_) {
-    if (!connection || connection->amount.value() == 0.0f) continue;
-    DynamicObject* mod = new DynamicObject();
-    mod->setProperty("source", String(connection->source));
-    mod->setProperty("destination", String(connection->destination));
-    mod->setProperty("amount", connection->amount.value());
-    modArray.add(mod);
-  }
-  root->setProperty("modulations", modArray);
-
-  return JSON::toString(root, true).toStdString();
+  return synth_.exportPatchToJson(false);
 }
 
 std::string AetherHelmMcpServer::setPatchParameters(const std::string& patchOrParamsJson) {
@@ -71,77 +21,27 @@ std::string AetherHelmMcpServer::setPatchParameters(const std::string& patchOrPa
     return "{\"success\": false, \"error\": \"Invalid JSON object provided.\"}";
 
   DynamicObject* obj = parsed.getDynamicObject();
+  var targetVar = parsed;
   if (obj->hasProperty("patch_or_params") && obj->getProperty("patch_or_params").isObject())
-    obj = obj->getProperty("patch_or_params").getDynamicObject();
+    targetVar = obj->getProperty("patch_or_params");
   else if (obj->hasProperty("patch") && obj->getProperty("patch").isObject())
-    obj = obj->getProperty("patch").getDynamicObject();
+    targetVar = obj->getProperty("patch");
 
-  NamedValueSet props = obj->getProperties();
-
-  if (props.contains("patch_name"))
-    patch_name_ = props["patch_name"].toString().toStdString();
-  if (props.contains("author"))
-    author_ = props["author"].toString().toStdString();
-
+  std::string targetJson = JSON::toString(targetVar, false).toStdString();
+  std::string err;
   int updatedCount = 0;
-
-  auto applyParam = [this, &updatedCount](const std::string& key, const var& val, const std::string& prefix = "") {
-    if (val.isDouble() || val.isInt() || val.isInt64() || val.isBool()) {
-      std::string target = key;
-      if (!mopo::Parameters::isParameter(target)) {
-        std::string combined = prefix.empty() ? key : prefix + "_" + key;
-        if (mopo::Parameters::isParameter(combined)) target = combined;
-        else if (combined == "filter_cutoff") target = "cutoff";
-        else if (combined == "filter_resonance") target = "resonance";
-        else if (combined == "filter_env_depth" || combined == "env_depth") target = "fil_env_depth";
-      }
-      if (mopo::Parameters::isParameter(target)) {
-        applyHeadlessControl(target, static_cast<float>(val));
-        updatedCount++;
-      }
-    }
-  };
-
-  std::function<void(const var&, const std::string&)> parseSection = [&](const var& sectionVar, const std::string& prefix) {
-    if (!sectionVar.isObject()) return;
-    DynamicObject* sObj = sectionVar.getDynamicObject();
-    NamedValueSet sProps = sObj->getProperties();
-    for (int i = 0; i < sProps.size(); ++i) {
-      std::string k = sProps.getName(i).toString().toStdString();
-      var v = sProps.getValueAt(i);
-      if (v.isObject()) {
-        std::string newPrefix = prefix.empty() ? k : prefix + "_" + k;
-        parseSection(v, newPrefix);
-      } else {
-        applyParam(k, v, prefix);
-      }
-    }
-  };
-
-  if (props.contains("settings") && props["settings"].isObject()) {
-    DynamicObject* settings = props["settings"].getDynamicObject();
-    NamedValueSet settingProps = settings->getProperties();
-    for (int i = 0; i < settingProps.size(); ++i) {
-      std::string key = settingProps.getName(i).toString().toStdString();
-      applyParam(key, settingProps.getValueAt(i));
-    }
-  }
-
-  const char* sections[] = { "oscillators", "filter", "envelopes", "modulators", "effects", "global" };
-  for (const char* sec : sections) {
-    if (props.contains(sec))
-      parseSection(props[sec], sec);
-  }
-
-  for (int i = 0; i < props.size(); ++i) {
-    std::string key = props.getName(i).toString().toStdString();
-    applyParam(key, props.getValueAt(i));
+  bool ok = synth_.loadPatchFromJson(targetJson, &err, &updatedCount);
+  if (!ok) {
+    DynamicObject* errResp = new DynamicObject();
+    errResp->setProperty("success", false);
+    errResp->setProperty("error", String(err));
+    return JSON::toString(errResp, false).toStdString();
   }
 
   DynamicObject* resp = new DynamicObject();
   resp->setProperty("success", true);
   resp->setProperty("parameters_updated", updatedCount);
-  resp->setProperty("patch_name", String(patch_name_));
+  resp->setProperty("patch_name", synth_.getPatchName());
   return JSON::toString(resp, false).toStdString();
 }
 
@@ -171,27 +71,30 @@ std::string AetherHelmMcpServer::triggerPreviewNote(int noteNumber, float veloci
 
   const int sampleRate = 44100;
   const int bufferSize = 256;
-  engine_.setSampleRate(sampleRate);
-  engine_.setBufferSize(bufferSize);
+  synth_.getEngine()->setSampleRate(sampleRate);
+  synth_.getEngine()->setBufferSize(bufferSize);
 
   int totalSamples = static_cast<int>(durationSeconds * sampleRate);
   int noteOffSample = static_cast<int>(durationSeconds * 0.8f * sampleRate);
 
-  engine_.noteOn(static_cast<float>(noteNumber), velocity, 0, 0);
+  synth_.getEngine()->noteOn(static_cast<float>(noteNumber), velocity, 0, 0);
 
   int samplesRendered = 0;
   float peakVal = 0.0f;
   double sumSquares = 0.0;
   int sampleCount = 0;
+  bool noteOffSent = false;
 
   while (samplesRendered < totalSamples) {
-    if (samplesRendered >= noteOffSample)
-      engine_.allNotesOff(0);
+    if (!noteOffSent && samplesRendered >= noteOffSample) {
+      synth_.getEngine()->allNotesOff(0);
+      noteOffSent = true;
+    }
 
-    engine_.process();
+    synth_.renderBlock();
 
-    const mopo::mopo_float* left = engine_.output(0)->buffer;
-    const mopo::mopo_float* right = engine_.output(1)->buffer;
+    const mopo::mopo_float* left = synth_.getEngine()->output(0)->buffer;
+    const mopo::mopo_float* right = synth_.getEngine()->output(1)->buffer;
 
     for (int i = 0; i < bufferSize; ++i) {
       float l = std::abs(static_cast<float>(left[i]));
@@ -205,7 +108,7 @@ std::string AetherHelmMcpServer::triggerPreviewNote(int noteNumber, float veloci
     samplesRendered += bufferSize;
   }
 
-  engine_.allNotesOff(0);
+  synth_.getEngine()->allNotesOff(0);
 
   double rms = (sampleCount > 0) ? std::sqrt(sumSquares / sampleCount) : 0.0;
 
@@ -287,10 +190,8 @@ std::string AetherHelmMcpServer::generatePatchFromPrompt(const std::string& prom
     }
   }
 
-  size_t start = content.toStdString().find('{');
-  size_t end = content.toStdString().rfind('}');
-  if (start != std::string::npos && end != std::string::npos) {
-    std::string jsonSub = content.toStdString().substr(start, end - start + 1);
+  std::string jsonSub = AetherPatchSerializer::extractJsonFromText(content.toStdString());
+  if (!jsonSub.empty() && jsonSub.front() == '{' && jsonSub.back() == '}') {
     setPatchParameters(jsonSub);
     return "{\"success\": true, \"patch\": " + jsonSub + "}";
   }
@@ -304,7 +205,7 @@ bool AetherHelmMcpServer::installDesktopConfigs(bool claude, bool cursor, bool w
 
   auto registerMcpInConfig = [&exePath](const File& configFile, const String& configName) {
     if (!configFile.getParentDirectory().exists())
-      return false;
+      configFile.getParentDirectory().createDirectory();
 
     var configVar;
     if (configFile.exists()) {
@@ -456,7 +357,7 @@ void AetherHelmMcpServer::handleJsonRpcMessage(const std::string& msg) {
   DynamicObject* obj = req.getDynamicObject();
   std::string method = obj->getProperty("method").toString().toStdString();
   var idVar = obj->getProperty("id");
-  std::string idStr = idVar.isVoid() ? "null" : (idVar.isInt() || idVar.isInt64()) ? std::to_string(static_cast<int>(idVar)) : ("\"" + idVar.toString().toStdString() + "\"");
+  std::string idStr = idVar.isVoid() ? "null" : JSON::toString(idVar).toStdString();
 
   if (method == "initialize") {
     std::string initResp = R"({

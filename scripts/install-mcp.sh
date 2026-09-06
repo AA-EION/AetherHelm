@@ -10,6 +10,8 @@ MCP_EXE=""
 CANDIDATES=(
   "$REPO_ROOT/build/aetherhelm-mcp"
   "$REPO_ROOT/build/Release/aetherhelm-mcp"
+  "$REPO_ROOT/build/aetherhelm-mcp_artefacts/Release/aetherhelm-mcp"
+  "$REPO_ROOT/build/aetherhelm-mcp_artefacts/aetherhelm-mcp"
   "$REPO_ROOT/bin/aetherhelm-mcp"
   "$(which aetherhelm-mcp 2>/dev/null || true)"
 )

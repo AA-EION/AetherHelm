@@ -5,7 +5,7 @@
 #include <map>
 #include <memory>
 #include "JuceHeader.h"
-#include "helm_engine.h"
+#include "headless_synth.h"
 #include "helm_common.h"
 
 class AetherHelmMcpServer {
@@ -33,14 +33,6 @@ private:
 
   std::string getToolsListJson();
 
-  // Headless audio synth engine for MCP
-  mopo::HelmEngine engine_;
-  mopo::control_map controls_;
-  std::set<mopo::ModulationConnection*> mod_connections_;
-  mopo::ModulationConnectionBank modulation_bank_;
-  std::string patch_name_;
-  std::string author_;
-
-  void initHeadlessSynth();
-  void applyHeadlessControl(const std::string& name, float value);
+  // Unified headless engine backed by HeadlessSynth
+  HeadlessSynth synth_;
 };

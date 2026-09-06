@@ -13,6 +13,8 @@ $RepoRoot = Split-Path -Parent $ScriptDir
 $Candidates = @(
     "$RepoRoot\build\aetherhelm-mcp.exe",
     "$RepoRoot\build\Release\aetherhelm-mcp.exe",
+    "$RepoRoot\build\aetherhelm-mcp_artefacts\Release\aetherhelm-mcp.exe",
+    "$RepoRoot\build\aetherhelm-mcp_artefacts\aetherhelm-mcp.exe",
     "$RepoRoot\bin\aetherhelm-mcp.exe",
     (Get-Command aetherhelm-mcp -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)
 )

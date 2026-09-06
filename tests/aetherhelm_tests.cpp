@@ -5,26 +5,11 @@
 #include "JuceHeader.h"
 #include "helm_common.h"
 #include "helm_engine.h"
-#include "synth_base.h"
+#include "headless_synth.h"
 #include "aether_patch_serializer.h"
 #include "aetherhelm_mcp_server.h"
 
-// Headless test harness
-class DummySynth : public SynthBase {
-public:
-  DummySynth() {
-    engine_.init();
-    engine_.setSampleRate(44100);
-    engine_.setBufferSize(256);
-    loadInitPatch();
-  }
-
-  const CriticalSection& getCriticalSection() override { return lock_; }
-  SynthGuiInterface* getGuiInterface() override { return nullptr; }
-
-private:
-  CriticalSection lock_;
-};
+using DummySynth = HeadlessSynth;
 
 void testParameterClamping() {
   std::cout << "[RUN] testParameterClamping..." << std::endl;
@@ -159,6 +144,151 @@ void testMcpServerAudioPreviewAndTools() {
   std::cout << "[PASS] testMcpServerAudioPreviewAndTools" << std::endl;
 }
 
+void testMcpModulationsIntegration() {
+  std::cout << "[RUN] testMcpModulationsIntegration..." << std::endl;
+  AetherHelmMcpServer server;
+
+  // Set modulations via MCP setPatchParameters
+  std::string setWithMods = R"({
+    "patch_name": "Modulated Lead",
+    "settings": {
+      "cutoff": 70.0
+    },
+    "modulations": [
+      {
+        "source": "mod_envelope",
+        "destination": "cutoff",
+        "amount": 0.65
+      },
+      {
+        "source": "mono_lfo_1",
+        "destination": "filter_blend",
+        "amount": -0.40
+      }
+    ]
+  })";
+
+  std::string setResp = server.setPatchParameters(setWithMods);
+  assert(setResp.find("\"success\":true") != std::string::npos || setResp.find("\"success\": true") != std::string::npos);
+
+  // Verify modulations are preserved in current patch
+  std::string currentPatch = server.getCurrentPatch();
+  assert(currentPatch.find("mod_envelope") != std::string::npos);
+  assert(currentPatch.find("mono_lfo_1") != std::string::npos);
+  assert(currentPatch.find("Modulated Lead") != std::string::npos);
+
+  // Audition audio rendering with modulations active
+  std::string preview = server.triggerPreviewNote(64, 0.9f, 0.25f);
+  assert(preview.find("preview_rendered") != std::string::npos);
+  assert(preview.find("\"signal_detected\": true") != std::string::npos || preview.find("\"signal_detected\":true") != std::string::npos);
+
+  std::cout << "[PASS] testMcpModulationsIntegration" << std::endl;
+}
+
+void testJsonExtractionWithMarkdownAndCommentaryBraces() {
+  std::cout << "[RUN] testJsonExtractionWithMarkdownAndCommentaryBraces..." << std::endl;
+
+  // Case 1: Markdown fenced code with trailing commentary containing braces
+  std::string markdownWithCommentary =
+    "Here is your synth patch:\n"
+    "```json\n"
+    "{\n"
+    "  \"patch_name\": \"Cyber Bass\",\n"
+    "  \"settings\": {\n"
+    "    \"cutoff\": 48.0,\n"
+    "    \"resonance\": 0.65\n"
+    "  }\n"
+    "}\n"
+    "```\n"
+    "Note: The {cutoff} was lowered to {48.0} to create warmth.\n";
+
+  std::string extracted1 = AetherPatchSerializer::extractJsonFromText(markdownWithCommentary);
+  var parsed1;
+  Result r1 = JSON::parse(String(extracted1), parsed1);
+  assert(r1.wasOk());
+  assert(parsed1.isObject());
+  assert(parsed1.getDynamicObject()->getProperty("patch_name").toString() == "Cyber Bass");
+
+  // Case 2: Raw JSON without markdown, but with trailing comment containing braces
+  std::string rawWithBraces =
+    "{\n"
+    "  \"patch_name\": \"Pluck\",\n"
+    "  \"settings\": { \"cutoff\": 90.0 }\n"
+    "}\n"
+    "Additional guidance: Check {amp_envelope} for decay settings.\n";
+
+  std::string extracted2 = AetherPatchSerializer::extractJsonFromText(rawWithBraces);
+  var parsed2;
+  Result r2 = JSON::parse(String(extracted2), parsed2);
+  assert(r2.wasOk());
+  assert(parsed2.isObject());
+  assert(parsed2.getDynamicObject()->getProperty("patch_name").toString() == "Pluck");
+
+  // Case 3: JSON containing braces inside string values
+  std::string jsonWithBraceInString = R"({
+    "patch_name": "Preset {Special Edition}",
+    "settings": { "cutoff": 64.0 }
+  })";
+
+  std::string extracted3 = AetherPatchSerializer::extractJsonFromText(jsonWithBraceInString);
+  var parsed3;
+  Result r3 = JSON::parse(String(extracted3), parsed3);
+  assert(r3.wasOk());
+  assert(parsed3.isObject());
+  assert(parsed3.getDynamicObject()->getProperty("patch_name").toString() == "Preset {Special Edition}");
+
+  std::cout << "[PASS] testJsonExtractionWithMarkdownAndCommentaryBraces" << std::endl;
+}
+
+void testNaNAndInfinityProtection() {
+  std::cout << "[RUN] testNaNAndInfinityProtection..." << std::endl;
+  DummySynth synth;
+
+  // Verify non-finite floats don't corrupt the DSP controls
+  AetherPatchSerializer::applyControl(&synth, "cutoff", std::numeric_limits<float>::quiet_NaN());
+  float cutoffVal = synth.getControls()["cutoff"]->value();
+  assert(std::isfinite(cutoffVal));
+
+  AetherPatchSerializer::applyControl(&synth, "resonance", std::numeric_limits<float>::infinity());
+  float resVal = synth.getControls()["resonance"]->value();
+  assert(std::isfinite(resVal));
+
+  AetherPatchSerializer::applyModulation(&synth, "mod_envelope", "cutoff", std::numeric_limits<float>::quiet_NaN());
+  AetherPatchSerializer::applyModulation(&synth, "mod_envelope", "resonance", std::numeric_limits<float>::infinity());
+
+  std::cout << "[PASS] testNaNAndInfinityProtection" << std::endl;
+}
+
+void testBooleanParameterSupport() {
+  std::cout << "[RUN] testBooleanParameterSupport..." << std::endl;
+  DummySynth synth;
+
+  std::string boolJson = R"({
+    "settings": {
+      "distortion_on": true,
+      "delay_sync": false,
+      "reverb_on": true
+    },
+    "effects": {
+      "delay": {
+        "on": true
+      }
+    }
+  })";
+
+  std::string err;
+  bool ok = synth.loadPatchFromJson(boolJson, &err);
+  assert(ok);
+
+  mopo::control_map controls = synth.getControls();
+  assert(controls["distortion_on"]->value() == 1.0f);
+  assert(controls["delay_sync"]->value() == 0.0f);
+  assert(controls["reverb_on"]->value() == 1.0f);
+  assert(controls["delay_on"]->value() == 1.0f);
+
+  std::cout << "[PASS] testBooleanParameterSupport" << std::endl;
+}
+
 void testBackgroundThreadSafety() {
   std::cout << "[RUN] testBackgroundThreadSafety..." << std::endl;
   DummySynth synth;
@@ -197,6 +327,10 @@ int main() {
   testHierarchicalSchema();
   testJsonRoundtrip();
   testMcpServerAudioPreviewAndTools();
+  testMcpModulationsIntegration();
+  testJsonExtractionWithMarkdownAndCommentaryBraces();
+  testNaNAndInfinityProtection();
+  testBooleanParameterSupport();
   testBackgroundThreadSafety();
 
   std::cout << "\n[ALL TESTS PASSED SUCCESSFULLY!]" << std::endl;

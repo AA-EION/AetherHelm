@@ -95,12 +95,7 @@ std::string OpenRouterClient::buildSystemPrompt() {
 }
 
 std::string OpenRouterClient::extractJsonContent(const std::string& raw) {
-  std::string s = raw;
-  size_t start = s.find('{');
-  size_t end = s.rfind('}');
-  if (start != std::string::npos && end != std::string::npos && end > start)
-    return s.substr(start, end - start + 1);
-  return raw;
+  return AetherPatchSerializer::extractJsonFromText(raw);
 }
 
 void OpenRouterClient::run() {
