@@ -3,6 +3,33 @@
 #include "synth_gui_interface.h"
 #include <algorithm>
 
+static std::string resolveParameterName(const std::string& key, const std::string& prefix) {
+  if (mopo::Parameters::isParameter(key))
+    return key;
+
+  std::string combined = prefix.empty() ? key : prefix + "_" + key;
+  if (mopo::Parameters::isParameter(combined))
+    return combined;
+
+  // Filter aliases
+  if (combined == "filter_env_depth" || combined == "env_depth") return "fil_env_depth";
+  if (combined == "filter_attack") return "fil_attack";
+  if (combined == "filter_decay") return "fil_decay";
+  if (combined == "filter_sustain") return "fil_sustain";
+  if (combined == "filter_release") return "fil_release";
+  if (combined == "filter_cutoff") return "cutoff";
+  if (combined == "filter_resonance") return "resonance";
+
+  if (prefix == "filter") {
+    std::string filPrefixed = "filter_" + key;
+    if (mopo::Parameters::isParameter(filPrefixed)) return filPrefixed;
+    std::string shortPrefixed = "fil_" + key;
+    if (mopo::Parameters::isParameter(shortPrefixed)) return shortPrefixed;
+  }
+
+  return combined;
+}
+
 void AetherPatchSerializer::applyControl(SynthBase* synth, const std::string& name, mopo::mopo_float value) {
   if (!mopo::Parameters::isParameter(name))
     return;
@@ -11,6 +38,12 @@ void AetherPatchSerializer::applyControl(SynthBase* synth, const std::string& na
   mopo::mopo_float minVal = static_cast<mopo::mopo_float>(details.min);
   mopo::mopo_float maxVal = static_cast<mopo::mopo_float>(details.max);
   mopo::mopo_float clamped = std::clamp<mopo::mopo_float>(value, minVal, maxVal);
+
+  mopo::control_map controls = synth->getControls();
+  auto it = controls.find(name);
+  if (it != controls.end() && it->second)
+    it->second->set(clamped);
+
   synth->valueChangedInternal(name, clamped);
 }
 
@@ -42,15 +75,7 @@ void AetherPatchSerializer::parseHierarchicalSection(SynthBase* synth, const var
       parseHierarchicalSection(synth, val, newPrefix);
     } else if (val.isDouble() || val.isInt() || val.isInt64() || val.isBool()) {
       mopo::mopo_float numVal = static_cast<mopo::mopo_float>(val);
-      std::string paramName = prefix.empty() ? key : prefix + "_" + key;
-
-      // Handle common schema alias mappings
-      if (paramName == "filter_env_depth") paramName = "fil_env_depth";
-      else if (paramName == "filter_attack") paramName = "fil_attack";
-      else if (paramName == "filter_decay") paramName = "fil_decay";
-      else if (paramName == "filter_sustain") paramName = "fil_sustain";
-      else if (paramName == "filter_release") paramName = "fil_release";
-
+      std::string paramName = resolveParameterName(key, prefix);
       applyControl(synth, paramName, numVal);
     }
   }

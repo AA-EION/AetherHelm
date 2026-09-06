@@ -71,6 +71,11 @@ std::string AetherHelmMcpServer::setPatchParameters(const std::string& patchOrPa
     return "{\"success\": false, \"error\": \"Invalid JSON object provided.\"}";
 
   DynamicObject* obj = parsed.getDynamicObject();
+  if (obj->hasProperty("patch_or_params") && obj->getProperty("patch_or_params").isObject())
+    obj = obj->getProperty("patch_or_params").getDynamicObject();
+  else if (obj->hasProperty("patch") && obj->getProperty("patch").isObject())
+    obj = obj->getProperty("patch").getDynamicObject();
+
   NamedValueSet props = obj->getProperties();
 
   if (props.contains("patch_name"))
@@ -80,28 +85,57 @@ std::string AetherHelmMcpServer::setPatchParameters(const std::string& patchOrPa
 
   int updatedCount = 0;
 
+  auto applyParam = [this, &updatedCount](const std::string& key, const var& val, const std::string& prefix = "") {
+    if (val.isDouble() || val.isInt() || val.isInt64() || val.isBool()) {
+      std::string target = key;
+      if (!mopo::Parameters::isParameter(target)) {
+        std::string combined = prefix.empty() ? key : prefix + "_" + key;
+        if (mopo::Parameters::isParameter(combined)) target = combined;
+        else if (combined == "filter_cutoff") target = "cutoff";
+        else if (combined == "filter_resonance") target = "resonance";
+        else if (combined == "filter_env_depth" || combined == "env_depth") target = "fil_env_depth";
+      }
+      if (mopo::Parameters::isParameter(target)) {
+        applyHeadlessControl(target, static_cast<float>(val));
+        updatedCount++;
+      }
+    }
+  };
+
+  std::function<void(const var&, const std::string&)> parseSection = [&](const var& sectionVar, const std::string& prefix) {
+    if (!sectionVar.isObject()) return;
+    DynamicObject* sObj = sectionVar.getDynamicObject();
+    NamedValueSet sProps = sObj->getProperties();
+    for (int i = 0; i < sProps.size(); ++i) {
+      std::string k = sProps.getName(i).toString().toStdString();
+      var v = sProps.getValueAt(i);
+      if (v.isObject()) {
+        std::string newPrefix = prefix.empty() ? k : prefix + "_" + k;
+        parseSection(v, newPrefix);
+      } else {
+        applyParam(k, v, prefix);
+      }
+    }
+  };
+
   if (props.contains("settings") && props["settings"].isObject()) {
     DynamicObject* settings = props["settings"].getDynamicObject();
     NamedValueSet settingProps = settings->getProperties();
     for (int i = 0; i < settingProps.size(); ++i) {
       std::string key = settingProps.getName(i).toString().toStdString();
-      var val = settingProps.getValueAt(i);
-      if (val.isDouble() || val.isInt() || val.isInt64()) {
-        applyHeadlessControl(key, static_cast<float>(val));
-        updatedCount++;
-      }
+      applyParam(key, settingProps.getValueAt(i));
     }
+  }
+
+  const char* sections[] = { "oscillators", "filter", "envelopes", "modulators", "effects", "global" };
+  for (const char* sec : sections) {
+    if (props.contains(sec))
+      parseSection(props[sec], sec);
   }
 
   for (int i = 0; i < props.size(); ++i) {
     std::string key = props.getName(i).toString().toStdString();
-    if (mopo::Parameters::isParameter(key)) {
-      var val = props.getValueAt(i);
-      if (val.isDouble() || val.isInt() || val.isInt64()) {
-        applyHeadlessControl(key, static_cast<float>(val));
-        updatedCount++;
-      }
-    }
+    applyParam(key, props.getValueAt(i));
   }
 
   DynamicObject* resp = new DynamicObject();
@@ -436,6 +470,8 @@ void AetherHelmMcpServer::handleJsonRpcMessage(const std::string& msg) {
       }
     })";
     sendResponse(idStr, initResp);
+  } else if (method == "ping") {
+    sendResponse(idStr, "{}");
   } else if (method == "notifications/initialized") {
     // Client initialized notification
   } else if (method == "tools/list") {

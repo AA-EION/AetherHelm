@@ -15,7 +15,7 @@
  */
 
 #include "synth_gui_interface.h"
-
+#include "full_interface.h"
 #include "default_look_and_feel.h"
 #include "load_save.h"
 #include "synth_base.h"
@@ -29,6 +29,8 @@ SynthGuiInterface::SynthGuiInterface(SynthBase* synth, bool use_gui) : synth_(sy
                              synth->getKeyboardState());
   }
 }
+
+SynthGuiInterface::~SynthGuiInterface() = default;
 
 void SynthGuiInterface::updateFullGui() {
   if (gui_ == nullptr)

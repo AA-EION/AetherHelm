@@ -1,6 +1,7 @@
 #include <cassert>
 #include <iostream>
 #include <cmath>
+#include <thread>
 #include "JuceHeader.h"
 #include "helm_common.h"
 #include "helm_engine.h"
@@ -48,13 +49,14 @@ void testParameterClamping() {
   float resVal = controls["resonance"]->value();
   float volVal = controls["volume"]->value();
 
-  assert(cutoffVal <= 127.0f && cutoffVal >= 28.0f);
-  assert(resVal >= 0.0f && resVal <= 1.0f);
-  assert(volVal <= 1.4143f && volVal >= 0.0f);
+  // Verify EXACT clamp bounds are enforced and updated immediately in controls
+  assert(std::abs(cutoffVal - 127.0f) < 0.001f);
+  assert(std::abs(resVal - 0.0f) < 0.001f);
+  assert(std::abs(volVal - 1.4143f) < 0.001f);
 
-  std::cout << "  -> Cutoff clamped to: " << cutoffVal << " (max: 127.0)" << std::endl;
-  std::cout << "  -> Resonance clamped to: " << resVal << " (min: 0.0)" << std::endl;
-  std::cout << "  -> Volume clamped to: " << volVal << " (max: 1.4143)" << std::endl;
+  std::cout << "  -> Cutoff clamped exactly to: " << cutoffVal << " (max: 127.0)" << std::endl;
+  std::cout << "  -> Resonance clamped exactly to: " << resVal << " (min: 0.0)" << std::endl;
+  std::cout << "  -> Volume clamped exactly to: " << volVal << " (max: 1.4143)" << std::endl;
   std::cout << "[PASS] testParameterClamping" << std::endl;
 }
 
@@ -74,7 +76,8 @@ void testHierarchicalSchema() {
     },
     "filter": {
       "cutoff": 62.5,
-      "resonance": 0.45
+      "resonance": 0.45,
+      "style": 1.0
     },
     "effects": {
       "reverb": {
@@ -95,6 +98,7 @@ void testHierarchicalSchema() {
   assert(std::abs(controls["cross_modulation"]->value() - 0.25f) < 0.01f);
   assert(std::abs(controls["cutoff"]->value() - 62.5f) < 0.01f);
   assert(std::abs(controls["resonance"]->value() - 0.45f) < 0.01f);
+  assert(std::abs(controls["filter_style"]->value() - 1.0f) < 0.01f);
   assert(std::abs(controls["reverb_feedback"]->value() - 0.95f) < 0.01f);
 
   std::cout << "[PASS] testHierarchicalSchema" << std::endl;
@@ -125,21 +129,61 @@ void testJsonRoundtrip() {
   std::cout << "[PASS] testJsonRoundtrip" << std::endl;
 }
 
-void testMcpServerAudioPreview() {
-  std::cout << "[RUN] testMcpServerAudioPreview..." << std::endl;
+void testMcpServerAudioPreviewAndTools() {
+  std::cout << "[RUN] testMcpServerAudioPreviewAndTools..." << std::endl;
   AetherHelmMcpServer server;
 
+  // 1. Parameters list
   std::string params = server.listAvailableParameters();
   assert(!params.empty());
   assert(params.find("parameters") != std::string::npos);
 
+  // 2. Set patch parameters with nested patch_or_params
+  std::string setJson = R"({
+    "patch_or_params": {
+      "cutoff": 55.0,
+      "resonance": 0.72
+    }
+  })";
+  std::string setResp = server.setPatchParameters(setJson);
+  assert(setResp.find("\"success\":true") != std::string::npos || setResp.find("\"success\": true") != std::string::npos);
+  assert(setResp.find("\"parameters_updated\":2") != std::string::npos || setResp.find("\"parameters_updated\": 2") != std::string::npos);
+
+  // 3. Audio preview synthesis
   std::string previewJson = server.triggerPreviewNote(60, 0.8f, 0.2f);
   assert(!previewJson.empty());
   assert(previewJson.find("preview_rendered") != std::string::npos);
   assert(previewJson.find("peak_amplitude") != std::string::npos);
 
   std::cout << "  -> MCP Preview Result: " << previewJson << std::endl;
-  std::cout << "[PASS] testMcpServerAudioPreview" << std::endl;
+  std::cout << "[PASS] testMcpServerAudioPreviewAndTools" << std::endl;
+}
+
+void testBackgroundThreadSafety() {
+  std::cout << "[RUN] testBackgroundThreadSafety..." << std::endl;
+  DummySynth synth;
+
+  std::string patchJson = R"({
+    "patch_name": "Thread Safety Patch",
+    "settings": {
+      "cutoff": 92.0,
+      "resonance": 0.4
+    }
+  })";
+
+  // Execute from an isolated background thread (simulating OpenRouterClient worker thread)
+  bool threadSuccess = false;
+  std::thread bgWorker([&synth, &patchJson, &threadSuccess]() {
+    std::string err;
+    threadSuccess = synth.loadPatchFromJson(patchJson, &err);
+  });
+  bgWorker.join();
+
+  assert(threadSuccess);
+  assert(synth.getPatchName() == "Thread Safety Patch");
+  assert(std::abs(synth.getControls()["cutoff"]->value() - 92.0f) < 0.01f);
+
+  std::cout << "[PASS] testBackgroundThreadSafety" << std::endl;
 }
 
 int main() {
@@ -152,7 +196,8 @@ int main() {
   testParameterClamping();
   testHierarchicalSchema();
   testJsonRoundtrip();
-  testMcpServerAudioPreview();
+  testMcpServerAudioPreviewAndTools();
+  testBackgroundThreadSafety();
 
   std::cout << "\n[ALL TESTS PASSED SUCCESSFULLY!]" << std::endl;
   return 0;

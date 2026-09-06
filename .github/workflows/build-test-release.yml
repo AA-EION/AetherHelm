@@ -89,7 +89,8 @@ jobs:
         run: |
           mkdir -p dist
           cp -r build/AetherHelm_artefacts/Release/* dist/ 2>/dev/null || true
-          cp build/aetherhelm-mcp dist/
+          cp -r build/AetherHelm_artefacts/* dist/ 2>/dev/null || true
+          find build -type f -name "aetherhelm-mcp" -exec cp {} dist/ \; 2>/dev/null || true
           cp -r scripts dist/
           tar -czf ${{ matrix.artifact_name }}.tar.gz -C dist .
 
@@ -99,7 +100,8 @@ jobs:
         run: |
           mkdir -p dist
           cp -r build/AetherHelm_artefacts/Release/* dist/ 2>/dev/null || true
-          cp build/aetherhelm-mcp dist/ 2>/dev/null || cp build/Release/aetherhelm-mcp dist/
+          cp -r build/AetherHelm_artefacts/* dist/ 2>/dev/null || true
+          find build -type f -name "aetherhelm-mcp" -exec cp {} dist/ \; 2>/dev/null || true
           cp -r scripts dist/
           cd dist && zip -r ../${{ matrix.artifact_name }}.zip .
 
@@ -109,8 +111,10 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist
-          Get-ChildItem -Path build/AetherHelm_artefacts/Release -Recurse | Copy-Item -Destination dist -Recurse -ErrorAction SilentlyContinue
-          Copy-Item build/Release/aetherhelm-mcp.exe dist/ -ErrorAction SilentlyContinue
+          if (Test-Path build/AetherHelm_artefacts) {
+            Copy-Item -Path build/AetherHelm_artefacts/* -Destination dist -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          Get-ChildItem -Path build -Filter "aetherhelm-mcp.exe" -Recurse | ForEach-Object { Copy-Item $_.FullName -Destination dist }
           Copy-Item -Recurse scripts dist/
           Compress-Archive -Path dist/* -DestinationPath "${{ matrix.artifact_name }}.zip"
 

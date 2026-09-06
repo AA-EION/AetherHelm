@@ -17,13 +17,13 @@
 #ifndef SYNTH_GUI_INTERFACE_H
 #define SYNTH_GUI_INTERFACE_H
 
-#include "full_interface.h"
+class FullInterface;
 #include "synth_base.h"
 
 class SynthGuiInterface {
   public:
     SynthGuiInterface(SynthBase* synth, bool use_gui = true);
-    virtual ~SynthGuiInterface() { }
+    virtual ~SynthGuiInterface();
 
     virtual AudioDeviceManager* getAudioDeviceManager() { return nullptr; }
 

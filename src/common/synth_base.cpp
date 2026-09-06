@@ -187,8 +187,15 @@ bool SynthBase::loadPatchFromJson(const std::string& jsonString, std::string* er
   bool result = AetherPatchSerializer::loadPatchFromJson(this, jsonString, error);
   SynthGuiInterface* gui_interface = getGuiInterface();
   if (result && gui_interface) {
-    gui_interface->updateFullGui();
-    gui_interface->notifyFresh();
+    if (MessageManager::getInstance()->isThisTheMessageThread()) {
+      gui_interface->updateFullGui();
+      gui_interface->notifyFresh();
+    } else {
+      MessageManager::callAsync([gui_interface]() {
+        gui_interface->updateFullGui();
+        gui_interface->notifyFresh();
+      });
+    }
   }
   return result;
 }

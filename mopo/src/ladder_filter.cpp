@@ -53,7 +53,7 @@ namespace mopo {
     mopo_float* dest = output()->buffer;
     double two_sr = sample_rate_ * 2.0;
     if (input(kReset)->source->triggered &&
-        input(kReset)->source->trigger_value == kVoiceReset) {
+        input(kReset)->source->trigger_value == static_cast<mopo_float>(kVoiceReset)) {
 
       int trigger_offset = input(kReset)->source->trigger_offset;
       int i = 0;

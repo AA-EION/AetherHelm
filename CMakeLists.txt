@@ -6,6 +6,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(MSVC)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/FI${CMAKE_CURRENT_SOURCE_DIR}/src/common/juce_compat.h>)
+else()
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-include${CMAKE_CURRENT_SOURCE_DIR}/src/common/juce_compat.h>)
+endif()
+
 # Option to fetch modern JUCE from GitHub or use local copy
 option(AETHERHELM_FETCH_JUCE "Fetch JUCE from GitHub" ON)
 
@@ -23,6 +29,7 @@ endif()
 
 # Common include directories
 set(AETHERHELM_INCLUDE_DIRS
+    ${CMAKE_CURRENT_SOURCE_DIR}/JuceLibraryCode
     ${CMAKE_CURRENT_SOURCE_DIR}/concurrentqueue
     ${CMAKE_CURRENT_SOURCE_DIR}/mopo/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -122,18 +129,33 @@ set(SYNTHESIS_SOURCES
     src/synthesis/value_switch.cpp
 )
 
-# Common utility sources
-set(COMMON_SOURCES
-    src/common/border_bounds_constrainer.cpp
-    src/common/file_list_box_model.cpp
+# Common headless utility sources
+set(SHARED_COMMON_SOURCES
     src/common/helm_common.cpp
     src/common/load_save.cpp
     src/common/midi_manager.cpp
     src/common/startup.cpp
     src/common/synth_base.cpp
-    src/common/synth_gui_interface.cpp
     src/common/aether_patch_serializer.cpp
     src/common/openrouter_client.cpp
+)
+
+# Headless targets use the stub for GUI callbacks
+set(HEADLESS_COMMON_SOURCES
+    ${SHARED_COMMON_SOURCES}
+    src/common/synth_gui_stub.cpp
+)
+
+# GUI common sources
+set(GUI_COMMON_SOURCES
+    src/common/border_bounds_constrainer.cpp
+    src/common/file_list_box_model.cpp
+    src/common/synth_gui_interface.cpp
+)
+
+set(COMMON_SOURCES
+    ${SHARED_COMMON_SOURCES}
+    ${GUI_COMMON_SOURCES}
 )
 
 # Look and feel UI sources
@@ -225,6 +247,7 @@ endif()
 # Plugin Target: AetherHelm
 # ==============================================================================
 juce_add_plugin(AetherHelm
+    VERSION "1.0.0"
     PLUGIN_MANUFACTURER_CODE "AeEl"
     PLUGIN_CODE "AeHm"
     FORMATS ${AETHERHELM_FORMATS}
@@ -275,12 +298,18 @@ juce_generate_juce_header(AetherHelm)
 # ==============================================================================
 # MCP Server Target: aetherhelm-mcp
 # ==============================================================================
-add_executable(aetherhelm-mcp
-    src/mcp/main.cpp
-    src/mcp/aetherhelm_mcp_server.cpp
-    ${MOPO_SOURCES}
-    ${SYNTHESIS_SOURCES}
-    ${COMMON_SOURCES}
+juce_add_console_app(aetherhelm-mcp
+    VERSION "1.0.0"
+    PRODUCT_NAME "aetherhelm-mcp"
+)
+
+target_sources(aetherhelm-mcp
+    PRIVATE
+        src/mcp/main.cpp
+        src/mcp/aetherhelm_mcp_server.cpp
+        ${MOPO_SOURCES}
+        ${SYNTHESIS_SOURCES}
+        ${HEADLESS_COMMON_SOURCES}
 )
 
 target_include_directories(aetherhelm-mcp
@@ -306,22 +335,36 @@ target_link_libraries(aetherhelm-mcp
         juce::juce_gui_basics
 )
 
+juce_generate_juce_header(aetherhelm-mcp)
+
 # ==============================================================================
 # Automated Tests: aetherhelm-tests
 # ==============================================================================
 enable_testing()
 
-add_executable(aetherhelm-tests
-    tests/aetherhelm_tests.cpp
-    src/mcp/aetherhelm_mcp_server.cpp
-    ${MOPO_SOURCES}
-    ${SYNTHESIS_SOURCES}
-    ${COMMON_SOURCES}
+juce_add_console_app(aetherhelm-tests
+    VERSION "1.0.0"
+    PRODUCT_NAME "aetherhelm-tests"
+)
+
+target_sources(aetherhelm-tests
+    PRIVATE
+        tests/aetherhelm_tests.cpp
+        src/mcp/aetherhelm_mcp_server.cpp
+        ${MOPO_SOURCES}
+        ${SYNTHESIS_SOURCES}
+        ${HEADLESS_COMMON_SOURCES}
 )
 
 target_include_directories(aetherhelm-tests
     PRIVATE
         ${AETHERHELM_INCLUDE_DIRS}
+)
+
+target_compile_definitions(aetherhelm-tests
+    PRIVATE
+        JUCE_STANDALONE_APPLICATION=1
+        JUCE_WEB_BROWSER=0
 )
 
 target_link_libraries(aetherhelm-tests
@@ -335,5 +378,7 @@ target_link_libraries(aetherhelm-tests
         juce::juce_events
         juce::juce_gui_basics
 )
+
+juce_generate_juce_header(aetherhelm-tests)
 
 add_test(NAME AetherHelmTestSuite COMMAND aetherhelm-tests)

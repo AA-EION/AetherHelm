@@ -29,15 +29,15 @@ namespace mopo {
       state_(kReleasing), current_value_(0.0) { }
 
   void Envelope::trigger(mopo_float event) {
-    if (event == kVoiceOn || event == kVoiceReset) {
+    if (event == static_cast<mopo_float>(kVoiceOn) || event == static_cast<mopo_float>(kVoiceReset)) {
       state_ = kAttacking;
       current_value_ = 0.0;
 
       output(kFinished)->trigger(kVoiceReset);
     }
-    else if (event == kVoiceOff)
+    else if (event == static_cast<mopo_float>(kVoiceOff))
       state_ = kReleasing;
-    else if (event == kVoiceKill) {
+    else if (event == static_cast<mopo_float>(kVoiceKill)) {
       state_ = kKilling;
     }
   }
