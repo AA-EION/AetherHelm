@@ -4,6 +4,7 @@
 #include <sstream>
 #include <cmath>
 #include <algorithm>
+#include <cstdlib>
 
 AetherHelmMcpServer::AetherHelmMcpServer() = default;
 
@@ -461,7 +462,7 @@ std::string AetherHelmMcpServer::randomizeSection(const std::string& section, fl
     float randTarget = minVal + randFrac * (maxVal - minVal);
 
     float newVal = mopo::utils::interpolate(currentVal, randTarget, intensity);
-    newVal = std::clamp(newVal, minVal, maxVal);
+    newVal = (std::clamp)(newVal, minVal, maxVal);
 
     AetherPatchSerializer::applyControl(&synth_, paramName, newVal);
     randomizedCount++;

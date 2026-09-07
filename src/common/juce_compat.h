@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef NOMINMAX
+#define NOMINMAX 1
+#endif
+
 #ifndef JUCE_MODAL_LOOPS_PERMITTED
 #define JUCE_MODAL_LOOPS_PERMITTED 1
 #endif

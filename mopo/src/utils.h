@@ -138,7 +138,7 @@ namespace mopo {
       return fmaf(t, to - from, from);
     }
 
-    template <typename T, typename U, typename V>
+    template <typename T = double, typename U = T, typename V = T>
     inline auto interpolate(T from, U to, V t) -> std::common_type_t<T, U, V> {
       using Common = std::common_type_t<T, U, V>;
       return static_cast<Common>(t) * (static_cast<Common>(to) - static_cast<Common>(from)) + static_cast<Common>(from);
