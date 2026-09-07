@@ -73,7 +73,17 @@ FullInterface::FullInterface(mopo::control_map controls, mopo::output_map modula
   addAndMakeVisible(logo_button_);
   logo_button_->addListener(this);
 
-  addAndMakeVisible(ai_prompt_section_ = new AiPromptSection("AI Sound Design"));
+  ai_button_ = new TextButton("ai_button");
+  ai_button_->setButtonText(TRANS("AI"));
+  ai_button_->setColour(TextButton::buttonColourId, Colour(0xff2a2e38));
+  ai_button_->setColour(TextButton::textColourOffId, Colour(0xffffffff));
+  ai_button_->setColour(TextButton::buttonOnColourId, Colour(0xff2196f3));
+  addAndMakeVisible(ai_button_);
+  ai_button_->addListener(this);
+
+  ai_prompt_section_ = new AiPromptSection("AI Sound Design");
+  addChildComponent(ai_prompt_section_);
+  ai_prompt_section_->setVisible(false);
 
   addChildComponent(patch_browser_ = new PatchBrowser());
   patch_selector_->setBrowser(patch_browser_);
@@ -117,6 +127,7 @@ FullInterface::~FullInterface() {
   contribute_section_ = nullptr;
   update_check_section_ = nullptr;
   arp_section_ = nullptr;
+  ai_button_ = nullptr;
   ai_prompt_section_ = nullptr;
   oscilloscope_ = nullptr;
   synthesis_interface_ = nullptr;
@@ -142,7 +153,7 @@ void FullInterface::paintBackground(Graphics& g) {
   shadow.drawForRectangle(g, arp_section_->getBounds());
   shadow.drawForRectangle(g, oscilloscope_->getBounds());
   shadow.drawForRectangle(g, patch_selector_->getBounds());
-  shadow.drawForRectangle(g, ai_prompt_section_->getBounds());
+  shadow.drawForRectangle(g, ai_button_->getBounds());
 
   int logo_padding = 2 * size_ratio_;
   int x = logo_button_->getX() - logo_padding;
@@ -205,12 +216,15 @@ void FullInterface::resized() {
 
   int logo_padding = 2 * ratio;
   int logo_width = top_height + 2 * logo_padding;
+  int ai_button_width = 30 * ratio;
 
-  int patch_selector_width = section_one_width - logo_width - padding;
+  int patch_selector_width = section_one_width - logo_width - ai_button_width - 2 * padding;
 
   logo_button_->setBounds(left + padding + logo_padding, padding, top_height, top_height);
   patch_selector_->setBounds(logo_button_->getRight() + padding + logo_padding, padding,
                              patch_selector_width, top_height);
+  ai_button_->setBounds(patch_selector_->getRight() + padding, padding,
+                        ai_button_width, top_height);
   global_tool_tip_->setBounds(patch_selector_->getX() + 0.11 * patch_selector_->getWidth(),
                               patch_selector_->getY(),
                               0.78 * patch_selector_->getWidth(),
@@ -218,7 +232,7 @@ void FullInterface::resized() {
 
   int volume_width = (section_two_width - padding) / 2;
   int oscilloscope_width = section_two_width - padding - volume_width;
-  volume_section_->setBounds(patch_selector_->getRight() + padding, padding,
+  volume_section_->setBounds(ai_button_->getRight() + padding, padding,
                              volume_width, top_height);
 
   oscilloscope_->setBounds(volume_section_->getRight() + padding, padding,
@@ -232,13 +246,13 @@ void FullInterface::resized() {
   arp_section_->setBounds(bpm_section_->getRight() + padding, padding,
                           arp_width, top_height);
 
+  synthesis_interface_->setBounds(left, top_height + padding,
+                                  width, height - top_height - padding);
+
   int ai_height = 52 * ratio;
   ai_prompt_section_->setSizeRatio(ratio);
   ai_prompt_section_->setBounds(left + padding, top_height + padding,
                                 width - 2 * padding, ai_height);
-
-  synthesis_interface_->setBounds(left, top_height + padding + ai_height,
-                                  width, height - top_height - padding - ai_height);
 
   about_section_->setBounds(getBounds());
   if (contribute_section_)
@@ -288,6 +302,12 @@ void FullInterface::setToolTipText(String parameter, String value) {
 void FullInterface::buttonClicked(Button* clicked_button) {
   if (clicked_button == logo_button_) {
     about_section_->setVisible(true);
+  }
+  else if (clicked_button == ai_button_) {
+    bool show = !ai_prompt_section_->isVisible();
+    ai_prompt_section_->setVisible(show);
+    if (show)
+      ai_prompt_section_->toFront(true);
   }
   else
     SynthSection::buttonClicked(clicked_button);

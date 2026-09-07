@@ -15,25 +15,52 @@ OpenRouterClient* OpenRouterClient::instance() {
   return &client;
 }
 
+static String s_cachedApiKey;
+
 String OpenRouterClient::getApiKey() {
+  if (s_cachedApiKey.isNotEmpty())
+    return s_cachedApiKey;
+
   String envKey = SystemStats::getEnvironmentVariable("OPENROUTER_API_KEY", "");
-  if (envKey.isNotEmpty())
-    return envKey;
+  if (envKey.isNotEmpty()) {
+    s_cachedApiKey = envKey.trim();
+    return s_cachedApiKey;
+  }
 
   var config = LoadSave::getConfigVar();
-  if (config.isObject() && config.getDynamicObject()->hasProperty("openrouter_api_key"))
-    return config.getDynamicObject()->getProperty("openrouter_api_key").toString();
+  if (config.isObject() && config.getDynamicObject()->hasProperty("openrouter_api_key")) {
+    String key = config.getDynamicObject()->getProperty("openrouter_api_key").toString().trim();
+    if (key.isNotEmpty()) {
+      s_cachedApiKey = key;
+      return s_cachedApiKey;
+    }
+  }
+
+  File keyFile = LoadSave::getConfigFile().getSiblingFile("openrouter.key");
+  if (keyFile.existsAsFile()) {
+    String key = keyFile.loadFileAsString().trim();
+    if (key.isNotEmpty()) {
+      s_cachedApiKey = key;
+      return s_cachedApiKey;
+    }
+  }
 
   return "";
 }
 
 void OpenRouterClient::setApiKey(const String& apiKey) {
+  s_cachedApiKey = apiKey.trim();
+
   var config = LoadSave::getConfigVar();
   if (!config.isObject())
     config = new DynamicObject();
 
-  config.getDynamicObject()->setProperty("openrouter_api_key", apiKey);
+  config.getDynamicObject()->setProperty("openrouter_api_key", s_cachedApiKey);
   LoadSave::saveVarToConfig(config.getDynamicObject());
+
+  File keyFile = LoadSave::getConfigFile().getSiblingFile("openrouter.key");
+  keyFile.getParentDirectory().createDirectory();
+  keyFile.replaceWithText(s_cachedApiKey);
 }
 
 std::vector<std::string> OpenRouterClient::getAvailableModels() {

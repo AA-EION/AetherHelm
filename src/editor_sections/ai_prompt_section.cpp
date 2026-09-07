@@ -38,6 +38,13 @@ AiPromptSection::AiPromptSection(String name) : SynthSection(name) {
   config_key_button_->addListener(this);
   addAndMakeVisible(config_key_button_);
 
+  close_button_ = new TextButton("CloseButton");
+  close_button_->setButtonText(TRANS("X"));
+  close_button_->setColour(TextButton::buttonColourId, Colours::transparentBlack);
+  close_button_->setColour(TextButton::textColourOffId, Colour(0xff888888));
+  close_button_->addListener(this);
+  addAndMakeVisible(close_button_);
+
   status_label_ = new Label("StatusLabel", TRANS("Ready"));
   status_label_->setFont(Fonts::instance()->proportional_light().withPointHeight(11.0f));
   status_label_->setColour(Label::textColourId, Colour(0xff888888));
@@ -48,9 +55,10 @@ AiPromptSection::~AiPromptSection() {}
 
 void AiPromptSection::paintBackground(Graphics& g) {
   paintContainer(g);
-  g.setFont(Fonts::instance()->proportional_regular().withPointHeight(11.0f));
-  g.setColour(Colour(0xff888888));
-  g.drawText(getName(), 8, 2, 120, 16, Justification::centredLeft);
+  g.setColour(Colour(0xf0181b20));
+  g.fillRoundedRectangle(getLocalBounds().toFloat(), 4.0f);
+  g.setColour(Colour(0xff333842));
+  g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(0.5f), 4.0f, 1.0f);
 }
 
 void AiPromptSection::resized() {
@@ -64,12 +72,13 @@ void AiPromptSection::resized() {
   int btnW = 85;
   int keyW = 45;
   int modelW = 160;
+  int closeW = 22;
   int gap = 6;
 
-  int inputW = w - btnW - keyW - modelW - (gap * 3);
+  int inputW = w - btnW - keyW - modelW - closeW - (gap * 4);
   if (inputW < 120) {
     modelW = 120;
-    inputW = w - btnW - keyW - modelW - (gap * 3);
+    inputW = w - btnW - keyW - modelW - closeW - (gap * 4);
   }
 
   int compH = std::min(24, h);
@@ -78,9 +87,10 @@ void AiPromptSection::resized() {
   model_selector_->setBounds(x + inputW + gap, y, modelW, compH);
   generate_button_->setBounds(x + inputW + gap + modelW + gap, y, btnW, compH);
   config_key_button_->setBounds(x + inputW + gap + modelW + gap + btnW + gap, y, keyW, compH);
+  close_button_->setBounds(x + inputW + gap + modelW + gap + btnW + gap + keyW + gap, y, closeW, compH);
 
   if (h >= 24)
-    status_label_->setBounds(x, y + compH + 2, w, std::max(14, h - compH - 2));
+    status_label_->setBounds(x, y + compH + 2, w - closeW - gap, std::max(14, h - compH - 2));
   else
     status_label_->setBounds(0, 0, 0, 0);
 }
@@ -90,6 +100,8 @@ void AiPromptSection::buttonClicked(Button* button) {
     triggerGeneration();
   else if (button == config_key_button_)
     configureApiKey();
+  else if (button == close_button_)
+    setVisible(false);
 }
 
 void AiPromptSection::triggerGeneration() {

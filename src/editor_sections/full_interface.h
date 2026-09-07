@@ -81,6 +81,7 @@ class FullInterface : public SynthSection, public OpenGLRenderer {
     ScopedPointer<UpdateCheckSection> update_check_section_;
     ScopedPointer<Component> standalone_settings_section_;
     ScopedPointer<ImageButton> logo_button_;
+    ScopedPointer<TextButton> ai_button_;
     ScopedPointer<AiPromptSection> ai_prompt_section_;
     ScopedPointer<ArpSection> arp_section_;
     ScopedPointer<SynthesisInterface> synthesis_interface_;

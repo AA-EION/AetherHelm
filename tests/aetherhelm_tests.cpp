@@ -11,6 +11,8 @@
 #include "headless_synth.h"
 #include "aether_patch_serializer.h"
 #include "aetherhelm_mcp_server.h"
+#include "openrouter_client.h"
+#include "load_save.h"
 
 using DummySynth = HeadlessSynth;
 
@@ -634,6 +636,20 @@ void testMcpMacroAndValidationTools() {
   std::cout << "[PASS] testMcpMacroAndValidationTools" << std::endl;
 }
 
+void testOpenRouterKeyPersistence() {
+  std::cout << "[RUN] testOpenRouterKeyPersistence..." << std::endl;
+  String testKey = "sk-or-v1-testkey1234567890abcdef";
+  OpenRouterClient::setApiKey(testKey);
+
+  assert(OpenRouterClient::getApiKey() == testKey);
+
+  File keyFile = LoadSave::getConfigFile().getSiblingFile("openrouter.key");
+  assert(keyFile.existsAsFile());
+  assert(keyFile.loadFileAsString().trim() == testKey);
+
+  std::cout << "[PASS] testOpenRouterKeyPersistence" << std::endl;
+}
+
 int main() {
   ScopedJuceInitialiser_GUI juceInit;
 
@@ -653,6 +669,7 @@ int main() {
   testMcpAudioAuditionPreviewMetrics();
   testMcpToolsExposeExternalAiToolsAndNoOpenRouterProxy();
   testMcpMacroAndValidationTools();
+  testOpenRouterKeyPersistence();
   testJsonExtractionWithMarkdownAndCommentaryBraces();
   testNaNAndInfinityProtection();
   testBooleanParameterSupport();

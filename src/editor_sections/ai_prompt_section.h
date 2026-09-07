@@ -17,6 +17,7 @@ private:
   ScopedPointer<TextButton> generate_button_;
   ScopedPointer<ComboBox> model_selector_;
   ScopedPointer<TextButton> config_key_button_;
+  ScopedPointer<TextButton> close_button_;
   ScopedPointer<Label> status_label_;
 
   void triggerGeneration();
