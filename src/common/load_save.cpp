@@ -559,7 +559,11 @@ void LoadSave::loadConfig(MidiManager* midi_manager, mopo::StringLayout* layout)
 
 bool LoadSave::isInstalled() {
   File factory_bank = getFactoryBankDirectory();
-  return factory_bank.exists();
+  if (factory_bank.exists())
+    return true;
+
+  File bank_dir = getBankDirectory();
+  return bank_dir.exists();
 }
 
 bool LoadSave::wasUpgraded() {
@@ -694,37 +698,115 @@ std::pair<wchar_t, wchar_t> LoadSave::getComputerKeyboardOctaveControls() {
 }
 
 File LoadSave::getFactoryBankDirectory() {
-  File patch_dir = File("");
+  Array<File> candidates;
+
 #ifdef LINUX
-  patch_dir = File(LINUX_FACTORY_PATCH_DIRECTORY);
+  candidates.add(File("/usr/share/aetherhelm/patches"));
+  candidates.add(File(LINUX_FACTORY_PATCH_DIRECTORY));
+  candidates.add(File("/usr/local/share/aetherhelm/patches"));
+  candidates.add(File("/usr/local/share/helm/patches"));
+
+  File exeDir = File::getSpecialLocation(File::currentExecutableFile).getParentDirectory();
+  candidates.add(exeDir.getParentDirectory().getChildFile("share/aetherhelm/patches"));
+  candidates.add(exeDir.getParentDirectory().getChildFile("share/helm/patches"));
+  candidates.add(exeDir.getChildFile("patches"));
+  candidates.add(File::getSpecialLocation(File::userHomeDirectory).getChildFile(".aetherhelm/patches"));
+  candidates.add(File::getSpecialLocation(File::userHomeDirectory).getChildFile(".helm/patches"));
+
 #elif defined(__APPLE__)
-  File data_dir = File::getSpecialLocation(File::commonApplicationDataDirectory);
-  patch_dir = data_dir.getChildFile(String("Audio/Presets/") + "Helm");
+  File commonData = File::getSpecialLocation(File::commonApplicationDataDirectory);
+  candidates.add(commonData.getChildFile("Audio/Presets/AetherHelm"));
+  candidates.add(commonData.getChildFile("Audio/Presets/Helm"));
+
+  File userData = File::getSpecialLocation(File::userApplicationDataDirectory);
+  candidates.add(userData.getChildFile("Audio/Presets/AetherHelm"));
+  candidates.add(userData.getChildFile("Audio/Presets/Helm"));
+
+  File bundleResources = File::getSpecialLocation(File::currentExecutableFile).getParentDirectory().getSiblingFile("Resources").getChildFile("patches");
+  candidates.add(bundleResources);
+
 #elif defined(_WIN32)
-  File data_dir = File::getSpecialLocation(File::commonDocumentsDirectory);
-  patch_dir = data_dir.getChildFile("Helm/Patches");
+  File appData = File::getSpecialLocation(File::commonApplicationDataDirectory);
+  candidates.add(appData.getChildFile("AetherHelm/patches"));
+  candidates.add(appData.getChildFile("Helm/patches"));
+
+  File commDocs = File::getSpecialLocation(File::commonDocumentsDirectory);
+  candidates.add(commDocs.getChildFile("AetherHelm/Patches"));
+  candidates.add(commDocs.getChildFile("Helm/Patches"));
+
+  File userDocs = File::getSpecialLocation(File::userDocumentsDirectory);
+  candidates.add(userDocs.getChildFile("AetherHelm/Patches"));
+  candidates.add(userDocs.getChildFile("Helm/Patches"));
+
+  File exeDir = File::getSpecialLocation(File::currentExecutableFile).getParentDirectory();
+  candidates.add(exeDir.getChildFile("patches"));
+  candidates.add(exeDir.getParentDirectory().getChildFile("patches"));
+  candidates.add(exeDir.getParentDirectory().getParentDirectory().getChildFile("patches"));
 #endif
 
-  return patch_dir;
+  // Relative development paths
+  candidates.add(File("../../../patches"));
+  candidates.add(File("../../patches"));
+  candidates.add(File("../patches"));
+  candidates.add(File("patches"));
+
+  for (const File& candidate : candidates) {
+    if (candidate.exists())
+      return candidate;
+  }
+
+#if defined(_WIN32)
+  return File::getSpecialLocation(File::commonApplicationDataDirectory).getChildFile("AetherHelm/patches");
+#elif defined(__APPLE__)
+  return File::getSpecialLocation(File::commonApplicationDataDirectory).getChildFile("Audio/Presets/AetherHelm");
+#else
+  return File("/usr/share/aetherhelm/patches");
+#endif
 }
 
 File LoadSave::getBankDirectory() {
-  if (!isInstalled())
-    return File("../../../patches");
-
   File patch_dir = File("");
 #ifdef LINUX
-  patch_dir = File(LINUX_BANK_DIRECTORY);
+  patch_dir = File::getSpecialLocation(File::userHomeDirectory).getChildFile(".aetherhelm/patches");
+  if (!patch_dir.exists()) {
+    File legacy = File(LINUX_BANK_DIRECTORY);
+    if (legacy.exists())
+      patch_dir = legacy;
+  }
 #elif defined(__APPLE__)
   File data_dir = File::getSpecialLocation(File::userApplicationDataDirectory);
   patch_dir = data_dir.getChildFile(String("Audio/Presets/") + ProjectInfo::projectName);
+  if (!patch_dir.exists()) {
+    File legacy = data_dir.getChildFile("Audio/Presets/Helm");
+    if (legacy.exists())
+      patch_dir = legacy;
+  }
 #elif defined(_WIN32)
   File documents_dir = File::getSpecialLocation(File::userDocumentsDirectory);
   File parent_dir = documents_dir.getChildFile(ProjectInfo::projectName);
-  if (!parent_dir.exists())
-    parent_dir.createDirectory();
+  if (!parent_dir.exists()) {
+    File legacy = documents_dir.getChildFile("Helm");
+    if (legacy.exists())
+      parent_dir = legacy;
+    else
+      parent_dir.createDirectory();
+  }
   patch_dir = parent_dir.getChildFile("Patches");
 #endif
+
+  if (patch_dir.exists())
+    return patch_dir;
+
+  if (!isInstalled()) {
+    File devPatches("../../../patches");
+    if (devPatches.exists()) return devPatches;
+    File devPatches2("../../patches");
+    if (devPatches2.exists()) return devPatches2;
+    File devPatches3("../patches");
+    if (devPatches3.exists()) return devPatches3;
+    File devPatches4("patches");
+    if (devPatches4.exists()) return devPatches4;
+  }
 
   if (!patch_dir.exists())
     patch_dir.createDirectory();

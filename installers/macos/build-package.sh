@@ -96,7 +96,20 @@ if [ -n "${MCP_SRC}" ]; then
     chmod +x "${PKG_ROOT}/usr/local/bin/aetherhelm-mcp"
 fi
 
-# 6. Apply Ad-Hoc Code Signing to all bundles and binaries
+# 6. Copy Factory Presets
+echo "[+] Installing Factory Presets..."
+mkdir -p "${PKG_ROOT}/Library/Audio/Presets/AetherHelm"
+mkdir -p "${PKG_ROOT}/Library/Audio/Presets/Helm"
+if [ -d "${REPO_ROOT}/patches" ]; then
+    cp -R "${REPO_ROOT}/patches/"* "${PKG_ROOT}/Library/Audio/Presets/AetherHelm/"
+    cp -R "${REPO_ROOT}/patches/"* "${PKG_ROOT}/Library/Audio/Presets/Helm/"
+    if [ -d "${PKG_ROOT}/Applications/AetherHelm.app" ]; then
+        mkdir -p "${PKG_ROOT}/Applications/AetherHelm.app/Contents/Resources/patches"
+        cp -R "${REPO_ROOT}/patches/"* "${PKG_ROOT}/Applications/AetherHelm.app/Contents/Resources/patches/"
+    fi
+fi
+
+# 7. Apply Ad-Hoc Code Signing to all bundles and binaries
 echo "[*] Applying ad-hoc code signature (codesign --force --deep -s -)..."
 find "${PKG_ROOT}" -name "*.app" -exec codesign --force --deep -s - {} + 2>/dev/null || true
 find "${PKG_ROOT}" -name "*.vst3" -exec codesign --force --deep -s - {} + 2>/dev/null || true

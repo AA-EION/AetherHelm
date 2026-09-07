@@ -31,6 +31,8 @@ public:
                               const std::string& model,
                               std::function<void(bool success, const std::string& message)> callback);
 
+  void cancelPendingFor(SynthBase* synth);
+
   bool isBusy() const { return isThreadRunning(); }
 
 private:

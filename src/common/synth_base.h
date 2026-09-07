@@ -31,7 +31,7 @@ class SynthGuiInterface;
 class SynthBase : public MidiManager::Listener {
   public:
     SynthBase();
-    virtual ~SynthBase() { }
+    virtual ~SynthBase();
 
     void valueChanged(const std::string& name, mopo::mopo_float value);
     void valueChangedThroughMidi(const std::string& name, mopo::mopo_float value) override;

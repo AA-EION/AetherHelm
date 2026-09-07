@@ -650,6 +650,94 @@ void testOpenRouterKeyPersistence() {
   std::cout << "[PASS] testOpenRouterKeyPersistence" << std::endl;
 }
 
+void testMcpValidatePatchComprehensive() {
+  std::cout << "[RUN] testMcpValidatePatchComprehensive..." << std::endl;
+  AetherHelmMcpServer server;
+
+  // 1. Hierarchical patch validation without top-level settings key
+  std::string hierPatch = R"({
+    "patch_name": "Deep Space Ambient",
+    "oscillators": {
+      "osc_1": {
+        "volume": 0.9,
+        "transpose": -12.0
+      }
+    },
+    "filter": {
+      "cutoff": 55.0,
+      "resonance": 0.65
+    }
+  })";
+  std::string hierResp = server.validatePatch(hierPatch);
+  assert(hierResp.find("\"valid\": true") != std::string::npos || hierResp.find("\"valid\":true") != std::string::npos);
+  assert(hierResp.find("\"parameters_checked\": 4") != std::string::npos || hierResp.find("\"parameters_checked\":4") != std::string::npos);
+
+  // 2. Flat parameter dictionary validation without settings key
+  std::string flatDict = R"({
+    "cutoff": 60.0,
+    "resonance": 0.5,
+    "reverb_feedback": 0.8
+  })";
+  std::string flatResp = server.validatePatch(flatDict);
+  assert(flatResp.find("\"valid\": true") != std::string::npos || flatResp.find("\"valid\":true") != std::string::npos);
+  assert(flatResp.find("\"parameters_checked\": 3") != std::string::npos || flatResp.find("\"parameters_checked\":3") != std::string::npos);
+
+  // 3. Rejection of invalid non-numeric type
+  std::string typeErrorPatch = R"({
+    "settings": {
+      "cutoff": "extremely_high"
+    }
+  })";
+  std::string typeResp = server.validatePatch(typeErrorPatch);
+  assert(typeResp.find("\"valid\": false") != std::string::npos || typeResp.find("\"valid\":false") != std::string::npos);
+  assert(typeResp.find("Invalid non-numeric value") != std::string::npos);
+
+  // 4. Modulation with out-of-range amount produces warning
+  std::string modRangePatch = R"({
+    "settings": { "cutoff": 64.0 },
+    "modulations": [
+      { "source": "mod_envelope", "destination": "cutoff", "amount": 2.5 }
+    ]
+  })";
+  std::string modResp = server.validatePatch(modRangePatch);
+  assert(modResp.find("\"valid\": true") != std::string::npos || modResp.find("\"valid\":true") != std::string::npos);
+  assert(modResp.find("exceeds [-1.0, 1.0]") != std::string::npos);
+
+  std::cout << "[PASS] testMcpValidatePatchComprehensive" << std::endl;
+}
+
+void testMcpMorphPatchSafetyAndHierarchy() {
+  std::cout << "[RUN] testMcpMorphPatchSafetyAndHierarchy..." << std::endl;
+  AetherHelmMcpServer server;
+
+  // Hierarchical target morph
+  std::string targetHier = R"({
+    "filter": {
+      "cutoff": 40.0,
+      "resonance": 0.8
+    }
+  })";
+  std::string resp = server.morphPatch(targetHier, 0.5f);
+  assert(resp.find("\"success\": true") != std::string::npos || resp.find("\"success\":true") != std::string::npos);
+  assert(resp.find("\"parameters_morphed\": 2") != std::string::npos || resp.find("\"parameters_morphed\":2") != std::string::npos);
+
+  std::cout << "[PASS] testMcpMorphPatchSafetyAndHierarchy" << std::endl;
+}
+
+void testFactoryBankLookupAndDiscovery() {
+  std::cout << "[RUN] testFactoryBankLookupAndDiscovery..." << std::endl;
+  File factoryDir = LoadSave::getFactoryBankDirectory();
+  assert(factoryDir != File());
+  assert(LoadSave::isInstalled());
+
+  File bankDir = LoadSave::getBankDirectory();
+  assert(bankDir != File());
+
+  std::cout << "  -> Factory Bank Dir: " << factoryDir.getFullPathName() << std::endl;
+  std::cout << "  -> User Bank Dir: " << bankDir.getFullPathName() << std::endl;
+  std::cout << "[PASS] testFactoryBankLookupAndDiscovery" << std::endl;
+}
+
 int main() {
   ScopedJuceInitialiser_GUI juceInit;
 
@@ -669,6 +757,9 @@ int main() {
   testMcpAudioAuditionPreviewMetrics();
   testMcpToolsExposeExternalAiToolsAndNoOpenRouterProxy();
   testMcpMacroAndValidationTools();
+  testMcpValidatePatchComprehensive();
+  testMcpMorphPatchSafetyAndHierarchy();
+  testFactoryBankLookupAndDiscovery();
   testOpenRouterKeyPersistence();
   testJsonExtractionWithMarkdownAndCommentaryBraces();
   testNaNAndInfinityProtection();

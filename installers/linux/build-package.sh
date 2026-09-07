@@ -72,6 +72,14 @@ cp "${REPO_ROOT}/images/helm_icon_256_2x.png" "${APP_DIR}/usr/share/icons/hicolo
 cp "${REPO_ROOT}/images/helm_icon_256_2x.png" "${APP_DIR}/aetherhelm.png"
 cp "${REPO_ROOT}/images/helm_icon_256_2x.png" "${APP_DIR}/.DirIcon"
 
+# 4. Copy Factory Presets into AppDir
+mkdir -p "${APP_DIR}/usr/share/aetherhelm/patches"
+mkdir -p "${APP_DIR}/usr/share/helm/patches"
+if [ -d "${REPO_ROOT}/patches" ]; then
+    cp -R "${REPO_ROOT}/patches/"* "${APP_DIR}/usr/share/aetherhelm/patches/"
+    cp -R "${REPO_ROOT}/patches/"* "${APP_DIR}/usr/share/helm/patches/"
+fi
+
 # 4. AppRun entrypoint script
 cat << 'EOF' > "${APP_DIR}/AppRun"
 #!/bin/sh
@@ -143,6 +151,12 @@ if [ -n "${MCP_SRC}" ]; then
 fi
 cp -r "${REPO_ROOT}/scripts/"* "${PLUGIN_STAGING}/scripts/"
 
+# Copy Factory Patches to plugin staging
+mkdir -p "${PLUGIN_STAGING}/patches"
+if [ -d "${REPO_ROOT}/patches" ]; then
+    cp -R "${REPO_ROOT}/patches/"* "${PLUGIN_STAGING}/patches/"
+fi
+
 # Create install-plugins.sh helper
 cat << 'EOF' > "${PLUGIN_STAGING}/install-plugins.sh"
 #!/bin/sh
@@ -160,6 +174,12 @@ fi
 if [ -f "bin/aetherhelm-mcp" ]; then
     cp bin/aetherhelm-mcp "${HOME}/.local/bin/"
     echo "[+] Installed MCP server to ${HOME}/.local/bin/aetherhelm-mcp"
+fi
+if [ -d "patches" ]; then
+    mkdir -p "${HOME}/.aetherhelm/patches" "${HOME}/.helm/patches"
+    cp -r patches/* "${HOME}/.aetherhelm/patches/"
+    cp -r patches/* "${HOME}/.helm/patches/"
+    echo "[+] Installed Factory Presets to ~/.aetherhelm/patches and ~/.helm/patches"
 fi
 echo "[+] Done!"
 EOF

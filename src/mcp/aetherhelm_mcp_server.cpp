@@ -6,7 +6,9 @@
 #include <algorithm>
 #include <cstdlib>
 
-AetherHelmMcpServer::AetherHelmMcpServer() = default;
+AetherHelmMcpServer::AetherHelmMcpServer() {
+  srand(static_cast<unsigned int>(Time::currentTimeMillis()));
+}
 
 AetherHelmMcpServer::~AetherHelmMcpServer() = default;
 
@@ -383,13 +385,23 @@ std::string AetherHelmMcpServer::morphPatch(const std::string& targetPatchOrPara
     DynamicObject* d = node.getDynamicObject();
     for (const auto& prop : d->getProperties()) {
       std::string key = prop.name.toString().toStdString();
-      std::string fullKey = prefix.empty() ? key : (prefix + "_" + key);
+      if (key == "modulations" || (prefix.empty() && (key == "patch_name" || key == "author" ||
+          key == "folder_name" || key == "synth_name" || key == "synth_version" || key == "license"))) {
+        continue;
+      }
       const var& val = prop.value;
 
       if (val.isObject()) {
-        self(self, val, fullKey);
+        std::string nextPrefix;
+        if (key == "settings" || key == "parameters" || key == "patch_or_params" || key == "patch" || key == "target_patch")
+          nextPrefix = prefix;
+        else
+          nextPrefix = prefix.empty() ? key : (prefix + "_" + key);
+        self(self, val, nextPrefix);
       } else if (val.isDouble() || val.isInt() || val.isInt64() || val.isBool()) {
         float fVal = val.isBool() ? ((bool)val ? 1.0f : 0.0f) : static_cast<float>(val);
+        if (std::isnan(fVal) || std::isinf(fVal)) continue;
+        std::string fullKey = prefix.empty() ? key : (prefix + "_" + key);
         std::string resolved = AetherPatchSerializer::resolveParameterName(fullKey);
         if (resolved.empty()) resolved = AetherPatchSerializer::resolveParameterName(key);
         if (resolved.empty()) resolved = fullKey;
@@ -398,16 +410,7 @@ std::string AetherHelmMcpServer::morphPatch(const std::string& targetPatchOrPara
     }
   };
 
-  DynamicObject* rootObj = parsed.getDynamicObject();
-  var targetNode = parsed;
-  if (rootObj->hasProperty("patch_or_params") && rootObj->getProperty("patch_or_params").isObject())
-    targetNode = rootObj->getProperty("patch_or_params");
-  else if (rootObj->hasProperty("target_patch") && rootObj->getProperty("target_patch").isObject())
-    targetNode = rootObj->getProperty("target_patch");
-  else if (rootObj->hasProperty("settings") && rootObj->getProperty("settings").isObject())
-    targetNode = rootObj->getProperty("settings");
-
-  extractTargets(extractTargets, targetNode, "");
+  extractTargets(extractTargets, parsed, "");
 
   mopo::control_map currentControls = synth_.getControls();
   int morphedCount = 0;
@@ -571,38 +574,77 @@ std::string AetherHelmMcpServer::validatePatch(const std::string& candidatePatch
   DynamicObject* rootObj = parsed.getDynamicObject();
   std::map<std::string, mopo::ValueDetails> allDetails = mopo::Parameters::lookup_.getAllDetails();
 
-  auto validateKeyVal = [&](const std::string& key, const var& val) {
+  auto validateKeyVal = [&](const std::string& fullKey, const std::string& rawKey, const var& val) {
     checked++;
-    std::string resolved = AetherPatchSerializer::resolveParameterName(key);
-    if (resolved.empty()) resolved = key;
+    std::string resolved = AetherPatchSerializer::resolveParameterName(fullKey);
+    if (resolved.empty()) resolved = AetherPatchSerializer::resolveParameterName(rawKey);
+    if (resolved.empty()) resolved = fullKey;
 
     auto it = allDetails.find(resolved);
     if (it == allDetails.end()) {
-      warnings.add("Unknown or unmapped parameter: '" + String(key) + "'");
+      warnings.add("Unknown or unmapped parameter: '" + String(fullKey) + "'");
       return;
     }
 
     if (val.isDouble() || val.isInt() || val.isInt64()) {
       double d = (double)val;
       if (std::isnan(d) || std::isinf(d)) {
-        errors.add("Non-finite numeric value (NaN/Inf) for parameter '" + String(key) + "'");
+        errors.add("Non-finite numeric value (NaN/Inf) for parameter '" + String(fullKey) + "'");
       } else if (d < it->second.min - 0.001 || d > it->second.max + 0.001) {
-        warnings.add("Parameter '" + String(key) + "' value " + String(d) +
+        warnings.add("Parameter '" + String(fullKey) + "' value " + String(d) +
                      " exceeds valid range [" + String(it->second.min) + ", " +
                      String(it->second.max) + "] (will be clamped)");
+      }
+    } else if (val.isBool()) {
+      // Valid boolean parameter
+    } else {
+      errors.add("Invalid non-numeric value for parameter '" + String(fullKey) + "'");
+    }
+  };
+
+  auto visitObject = [&](auto& self, const var& node, const std::string& prefix) -> void {
+    if (!node.isObject()) return;
+    DynamicObject* d = node.getDynamicObject();
+    for (const auto& prop : d->getProperties()) {
+      std::string key = prop.name.toString().toStdString();
+      const var& val = prop.value;
+
+      if (key == "modulations" || (prefix.empty() && (key == "patch_name" || key == "author" ||
+          key == "folder_name" || key == "synth_name" || key == "synth_version" || key == "license"))) {
+        continue;
+      }
+
+      if (val.isObject()) {
+        std::string nextPrefix;
+        if (key == "settings" || key == "parameters" || key == "patch_or_params" || key == "patch" || key == "target_patch")
+          nextPrefix = prefix;
+        else
+          nextPrefix = prefix.empty() ? key : (prefix + "_" + key);
+        self(self, val, nextPrefix);
+      } else {
+        std::string fullKey = prefix.empty() ? key : (prefix + "_" + key);
+        validateKeyVal(fullKey, key, val);
       }
     }
   };
 
-  if (rootObj->hasProperty("settings") && rootObj->getProperty("settings").isObject()) {
+  visitObject(visitObject, parsed, "");
+
+  // Modulations validation (check root, settings, or patch)
+  const Array<var>* mods = nullptr;
+  if (rootObj->hasProperty("modulations") && rootObj->getProperty("modulations").isArray()) {
+    mods = rootObj->getProperty("modulations").getArray();
+  } else if (rootObj->hasProperty("settings") && rootObj->getProperty("settings").isObject()) {
     DynamicObject* s = rootObj->getProperty("settings").getDynamicObject();
-    for (const auto& p : s->getProperties()) {
-      validateKeyVal(p.name.toString().toStdString(), p.value);
-    }
+    if (s->hasProperty("modulations") && s->getProperty("modulations").isArray())
+      mods = s->getProperty("modulations").getArray();
+  } else if (rootObj->hasProperty("patch") && rootObj->getProperty("patch").isObject()) {
+    DynamicObject* p = rootObj->getProperty("patch").getDynamicObject();
+    if (p->hasProperty("modulations") && p->getProperty("modulations").isArray())
+      mods = p->getProperty("modulations").getArray();
   }
 
-  if (rootObj->hasProperty("modulations") && rootObj->getProperty("modulations").isArray()) {
-    Array<var>* mods = rootObj->getProperty("modulations").getArray();
+  if (mods) {
     for (int i = 0; i < mods->size(); ++i) {
       var mVar = (*mods)[i];
       if (!mVar.isObject()) {
@@ -615,6 +657,17 @@ std::string AetherHelmMcpServer::validatePatch(const std::string& candidatePatch
       } else {
         std::string src = m->getProperty("source").toString().toStdString();
         std::string dst = m->getProperty("destination").toString().toStdString();
+        var amtVar = m->getProperty("amount");
+        if (amtVar.isDouble() || amtVar.isInt() || amtVar.isInt64()) {
+          double amt = (double)amtVar;
+          if (std::isnan(amt) || std::isinf(amt)) {
+            errors.add("Modulation at index " + String(i) + " has non-finite amount (NaN/Inf).");
+          } else if (amt < -1.0 || amt > 1.0) {
+            warnings.add("Modulation amount " + String(amt) + " exceeds [-1.0, 1.0] (will be clamped).");
+          }
+        } else {
+          errors.add("Modulation at index " + String(i) + " amount must be numeric.");
+        }
         std::string resSrc = AetherPatchSerializer::resolveModulationSourceName(src);
         std::string resDst = AetherPatchSerializer::resolveParameterName(dst);
         if (!AetherPatchSerializer::isValidModulationSource(src)) errors.add("Invalid modulation source: '" + String(src) + "'");
@@ -700,6 +753,10 @@ bool AetherHelmMcpServer::installDesktopConfigs(bool claude, bool cursor, bool w
 #if defined(_WIN32)
     File clineDir = File::getSpecialLocation(File::userApplicationDataDirectory).getChildFile("Code/User/globalStorage/saoudrizwan.claude-dev/settings");
     File rooDir = File::getSpecialLocation(File::userApplicationDataDirectory).getChildFile("Code/User/globalStorage/rooveterinaryinc.roo-cline/settings");
+#elif defined(__APPLE__)
+    File appSupport = File::getSpecialLocation(File::userApplicationDataDirectory).getChildFile("Application Support");
+    File clineDir = appSupport.getChildFile("Code/User/globalStorage/saoudrizwan.claude-dev/settings");
+    File rooDir = appSupport.getChildFile("Code/User/globalStorage/rooveterinaryinc.roo-cline/settings");
 #else
     File clineDir = File::getSpecialLocation(File::userHomeDirectory).getChildFile(".config/Code/User/globalStorage/saoudrizwan.claude-dev/settings");
     File rooDir = File::getSpecialLocation(File::userHomeDirectory).getChildFile(".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings");

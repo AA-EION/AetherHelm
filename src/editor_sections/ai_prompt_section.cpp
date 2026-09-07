@@ -53,12 +53,16 @@ AiPromptSection::AiPromptSection(String name) : SynthSection(name) {
 
 AiPromptSection::~AiPromptSection() {}
 
-void AiPromptSection::paintBackground(Graphics& g) {
-  paintContainer(g);
-  g.setColour(Colour(0xf0181b20));
+void AiPromptSection::paint(Graphics& g) {
+  // Opaque dark background with high contrast for dropdown overlay
+  g.setColour(Colour(0xf8181b20));
   g.fillRoundedRectangle(getLocalBounds().toFloat(), 4.0f);
-  g.setColour(Colour(0xff333842));
+  g.setColour(Colour(0xff3f4552));
   g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(0.5f), 4.0f, 1.0f);
+}
+
+void AiPromptSection::paintBackground(Graphics& g) {
+  paint(g);
 }
 
 void AiPromptSection::resized() {
@@ -122,13 +126,16 @@ void AiPromptSection::triggerGeneration() {
   status_label_->setText(TRANS("Generating sound via OpenRouter..."), NotificationType::dontSendNotification);
   generate_button_->setEnabled(false);
 
+  Component::SafePointer<AiPromptSection> safeThis(this);
   OpenRouterClient::instance()->requestPatchGeneration(
     synth,
     promptText.toStdString(),
     model,
-    [this](bool success, const std::string& message) {
-      generate_button_->setEnabled(true);
-      status_label_->setText(String(message), NotificationType::dontSendNotification);
+    [safeThis](bool success, const std::string& message) {
+      if (safeThis != nullptr) {
+        safeThis->generate_button_->setEnabled(true);
+        safeThis->status_label_->setText(String(message), NotificationType::dontSendNotification);
+      }
     }
   );
 }

@@ -18,6 +18,7 @@
 
 #include "aether_patch_serializer.h"
 #include "load_save.h"
+#include "openrouter_client.h"
 #include "startup.h"
 #include "synth_gui_interface.h"
 #include "utils.h"
@@ -39,6 +40,10 @@ SynthBase::SynthBase() {
   memory_index_ = 0;
 
   Startup::doStartupChecks(midi_manager_);
+}
+
+SynthBase::~SynthBase() {
+  OpenRouterClient::instance()->cancelPendingFor(this);
 }
 
 void SynthBase::valueChanged(const std::string& name, mopo::mopo_float value) {

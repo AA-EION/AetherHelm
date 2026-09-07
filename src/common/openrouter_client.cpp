@@ -94,6 +94,14 @@ void OpenRouterClient::requestPatchGeneration(SynthBase* synth,
   startThread();
 }
 
+void OpenRouterClient::cancelPendingFor(SynthBase* synth) {
+  ScopedLock lock(request_lock_);
+  if (current_request_.synth == synth) {
+    current_request_.synth = nullptr;
+    current_request_.callback = nullptr;
+  }
+}
+
 std::string OpenRouterClient::buildSystemPrompt() {
   return "You are an expert audio synthesizer sound designer and DSP architect for the AetherHelm synthesizer.\n"
          "When given a user description of a sound, you must generate or modify synthesizer parameters to fulfill the sound design.\n"

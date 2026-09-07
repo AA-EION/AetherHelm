@@ -81,6 +81,9 @@ Source: "..\..\scripts\install-mcp.ps1"; DestDir: "{app}\scripts"; Flags: ignore
 
 ; Factory Patches
 Source: "..\..\patches\*"; DestDir: "{commonappdata}\AetherHelm\patches"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: presets
+Source: "..\..\patches\*"; DestDir: "{commonappdata}\Helm\patches"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: presets
+Source: "..\..\patches\*"; DestDir: "{commondocs}\AetherHelm\Patches"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: presets
+Source: "..\..\patches\*"; DestDir: "{commondocs}\Helm\Patches"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: presets
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Components: standalone

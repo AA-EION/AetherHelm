@@ -92,10 +92,14 @@ WINDSURF_PATH="$HOME/.codeium/windsurf/mcp_config.json"
 update_json "$WINDSURF_PATH" "Windsurf"
 
 # 4. Cline / Roo-Code
-CLINE_PATH="$HOME/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  CLINE_PATH="$HOME/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+  ROO_PATH="$HOME/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/cline_mcp_settings.json"
+else
+  CLINE_PATH="$HOME/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+  ROO_PATH="$HOME/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/cline_mcp_settings.json"
+fi
 update_json "$CLINE_PATH" "Cline"
-
-ROO_PATH="$HOME/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/cline_mcp_settings.json"
 update_json "$ROO_PATH" "Roo-Code"
 
 echo ""

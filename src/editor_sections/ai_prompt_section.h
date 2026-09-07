@@ -8,6 +8,7 @@ public:
   AiPromptSection(String name);
   ~AiPromptSection() override;
 
+  void paint(Graphics& g) override;
   void paintBackground(Graphics& g) override;
   void resized() override;
   void buttonClicked(Button* button) override;
