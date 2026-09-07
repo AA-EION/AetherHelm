@@ -136,12 +136,17 @@ jobs:
         if: failure() && runner.os == 'Windows'
         shell: pwsh
         run: |
-          $diag = cmake --build build --config Release 2>&1 | Select-Object -Last 100
-          $diag | Write-Host
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Build Failure Diagnostics (${{ matrix.artifact_name }})"
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
-          $diag | Out-String | Add-Content -Path $env:GITHUB_STEP_SUMMARY
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+          try {
+            $diag = cmake --build build --config Release 2>&1 | Select-Object -Last 100
+            $diag | Write-Host
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Build Failure Diagnostics (${{ matrix.artifact_name }})"
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+            $diag | Out-String | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+          } catch {
+            Write-Host "Diagnostic capture error: $_"
+          }
+          $global:LASTEXITCODE = 0
 
       # Automated Testing
       - name: Run Test Suite

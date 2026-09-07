@@ -8,6 +8,7 @@
 #define JUCE_MODAL_LOOPS_PERMITTED 1
 #endif
 
+#ifdef __cplusplus
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -97,3 +98,4 @@ private:
 
 #endif // JUCE_SCOPEDPOINTER_H_INCLUDED
 #endif // JUCE_MAJOR_VERSION >= 6
+#endif // __cplusplus
