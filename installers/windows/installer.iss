@@ -45,11 +45,11 @@ Name: "plugins_only"; Description: "Audio Plugins Only (VST3, CLAP)"
 Name: "custom"; Description: "Custom Installation"; Flags: iscustom
 
 [Components]
-Name: "standalone"; Description: "AetherHelm Standalone Synthesizer Application"; Types: full custom; Flags: checkable
-Name: "vst3"; Description: "VST3 Plugin (.vst3)"; Types: full plugins_only custom; Flags: checkable
-Name: "clap"; Description: "CLAP Plugin (.clap)"; Types: full plugins_only custom; Flags: checkable
-Name: "mcp"; Description: "Model Context Protocol (MCP) Server for AI Tools (Claude Desktop, Cursor, Windsurf, Cline)"; Types: full custom; Flags: checkable
-Name: "presets"; Description: "Factory Patches & Presets"; Types: full plugins_only custom; Flags: checkable
+Name: "standalone"; Description: "AetherHelm Standalone Synthesizer Application"; Types: full custom
+Name: "vst3"; Description: "VST3 Plugin (.vst3)"; Types: full plugins_only custom
+Name: "clap"; Description: "CLAP Plugin (.clap)"; Types: full plugins_only custom
+Name: "mcp"; Description: "Model Context Protocol (MCP) Server for AI Tools (Claude Desktop, Cursor, Windsurf, Cline)"; Types: full custom
+Name: "presets"; Description: "Factory Patches & Presets"; Types: full plugins_only custom
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; Components: standalone
@@ -57,21 +57,24 @@ Name: "configure_mcp"; Description: "Automatically configure Claude Desktop, Cur
 
 [Files]
 ; Standalone Application
-Source: "..\..\build\AetherHelm_artefacts\Release\Standalone\AetherHelm.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: standalone; Check: FileExists(ExpandConstant('{src}\..\..\build\AetherHelm_artefacts\Release\Standalone\AetherHelm.exe'))
-Source: "..\..\dist\AetherHelm.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: standalone; Check: FileExists(ExpandConstant('{src}\..\..\dist\AetherHelm.exe'))
+Source: "..\..\build\AetherHelm_artefacts\Release\Standalone\AetherHelm.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist; Components: standalone
+Source: "..\..\dist\Standalone\AetherHelm.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist; Components: standalone
+Source: "..\..\dist\AetherHelm.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist; Components: standalone
 
 ; VST3 Plugin to Common Files\VST3
-Source: "..\..\build\AetherHelm_artefacts\Release\VST3\AetherHelm.vst3\*"; DestDir: "{commoncf64}\VST3\AetherHelm.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: vst3; Check: DirExists(ExpandConstant('{src}\..\..\build\AetherHelm_artefacts\Release\VST3\AetherHelm.vst3'))
-Source: "..\..\dist\AetherHelm.vst3\*"; DestDir: "{commoncf64}\VST3\AetherHelm.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: vst3; Check: DirExists(ExpandConstant('{src}\..\..\dist\AetherHelm.vst3'))
+Source: "..\..\build\AetherHelm_artefacts\Release\VST3\AetherHelm.vst3\*"; DestDir: "{commoncf64}\VST3\AetherHelm.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Components: vst3
+Source: "..\..\dist\VST3\AetherHelm.vst3\*"; DestDir: "{commoncf64}\VST3\AetherHelm.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Components: vst3
+Source: "..\..\dist\AetherHelm.vst3\*"; DestDir: "{commoncf64}\VST3\AetherHelm.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Components: vst3
 
 ; CLAP Plugin to Common Files\CLAP
-Source: "..\..\build\AetherHelm_artefacts\Release\CLAP\AetherHelm.clap"; DestDir: "{commoncf64}\CLAP"; Flags: ignoreversion; Components: clap; Check: FileExists(ExpandConstant('{src}\..\..\build\AetherHelm_artefacts\Release\CLAP\AetherHelm.clap'))
-Source: "..\..\dist\AetherHelm.clap"; DestDir: "{commoncf64}\CLAP"; Flags: ignoreversion; Components: clap; Check: FileExists(ExpandConstant('{src}\..\..\dist\AetherHelm.clap'))
+Source: "..\..\build\AetherHelm_artefacts\Release\CLAP\AetherHelm.clap"; DestDir: "{commoncf64}\CLAP"; Flags: ignoreversion skipifsourcedoesntexist; Components: clap
+Source: "..\..\dist\CLAP\AetherHelm.clap"; DestDir: "{commoncf64}\CLAP"; Flags: ignoreversion skipifsourcedoesntexist; Components: clap
+Source: "..\..\dist\AetherHelm.clap"; DestDir: "{commoncf64}\CLAP"; Flags: ignoreversion skipifsourcedoesntexist; Components: clap
 
 ; MCP Server Executable
-Source: "..\..\build\Release\aetherhelm-mcp.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: mcp; Check: FileExists(ExpandConstant('{src}\..\..\build\Release\aetherhelm-mcp.exe'))
-Source: "..\..\build\aetherhelm-mcp_artefacts\Release\aetherhelm-mcp.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: mcp; Check: FileExists(ExpandConstant('{src}\..\..\build\aetherhelm-mcp_artefacts\Release\aetherhelm-mcp.exe'))
-Source: "..\..\dist\aetherhelm-mcp.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: mcp; Check: FileExists(ExpandConstant('{src}\..\..\dist\aetherhelm-mcp.exe'))
+Source: "..\..\build\Release\aetherhelm-mcp.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist; Components: mcp
+Source: "..\..\build\aetherhelm-mcp_artefacts\Release\aetherhelm-mcp.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist; Components: mcp
+Source: "..\..\dist\aetherhelm-mcp.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist; Components: mcp
 
 ; MCP Management Scripts
 Source: "..\..\scripts\install-mcp.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion; Components: mcp
